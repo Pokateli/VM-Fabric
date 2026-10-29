@@ -1,0 +1,42 @@
+name: Build original amneziawg-go for AUPE VM tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  amneziawg-go:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Fetch upstream source and record exact commit
+        run: |
+          set -Eeuo pipefail
+          git clone --depth 1 --branch master https://github.com/amnezia-vpn/amneziawg-go.git upstream
+          mkdir -p output
+          git -C upstream rev-parse HEAD > output/UPSTREAM_COMMIT
+          git -C upstream remote get-url origin > output/UPSTREAM_URL
+      - name: Install Go 1.25
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.0'
+          cache: false
+      - name: Build Linux AMD64 original AWG client
+        run: |
+          set -Eeuo pipefail
+          cd upstream
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o ../output/amneziawg-go .
+          cd ..
+          chmod 755 output/amneziawg-go
+          output/amneziawg-go --version
+          sha256sum output/amneziawg-go > output/SHA256SUMS
+          (cd output && sha256sum -c SHA256SUMS)
+      - name: Upload verified AWG client binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: aupe-official-amneziawg-go-linux-amd64
+          path: output
+          compression-level: 0
+          retention-days: 30
