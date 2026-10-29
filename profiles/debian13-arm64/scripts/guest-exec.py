@@ -97,10 +97,15 @@ def main():
                 if not sent and PROMPT.search(clean):
                     # Script is loaded from the read-only VirtIO FAT disk.
                     serial = (
-                        "mkdir -p /mnt/dual-vm-run; "
-                        "mount -o ro /dev/vdb /mnt/dual-vm-run 2>/dev/null || "
-                        "mount -o ro /dev/vdb1 /mnt/dual-vm-run 2>/dev/null; "
-                        "if mountpoint -q /mnt/dual-vm-run; then "
+                        "mkdir -p /mnt/dual-vm-run; share_ready=0; "
+                        "for blk in /dev/vd[a-z] /dev/vd[a-z][0-9]* "
+                        "/dev/sd[a-z] /dev/sd[a-z][0-9]*; do "
+                        "test -b \"$blk\" || continue; "
+                        "if mount -t vfat -o ro \"$blk\" /mnt/dual-vm-run 2>/dev/null; then "
+                        f"if test -f /mnt/dual-vm-run/{payload_name}; then share_ready=1; break; fi; "
+                        "umount /mnt/dual-vm-run; "
+                        "fi; done; "
+                        "if [ \"$share_ready\" -eq 1 ]; then "
                         f"printf '\\nGUEST_BEGIN_{token}\\n'; "
                         f"bash /mnt/dual-vm-run/{payload_name}; rc=$?; "
                         "else echo 'Unable to mount guest share' >&2; rc=125; fi; "
