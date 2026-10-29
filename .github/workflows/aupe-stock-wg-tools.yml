@@ -1,0 +1,36 @@
+name: AUPE stock WireGuard offline client tools
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/aupe-stock-wg-tools.yml'
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Fetch official Debian 13 wg client and dependencies
+        run: |
+          set -Eeuo pipefail
+          mkdir -p output/debs
+          docker run --rm --platform linux/amd64 -v "$PWD/output/debs:/out" debian:13 bash -Eeuo pipefail -c '
+            rm -f /etc/apt/apt.conf.d/docker-clean
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --download-only --no-install-recommends wireguard-tools
+            cp -v /var/cache/apt/archives/*.deb /out/
+            (cd /out && sha256sum *.deb > SHA256SUMS)
+          '
+          (cd output/debs && sha256sum -c SHA256SUMS)
+          tar -C output -czf output/aupe-wg-tools-debian13.tar.gz debs
+          (cd output && sha256sum aupe-wg-tools-debian13.tar.gz > aupe-wg-tools-debian13.tar.gz.sha256)
+      - name: Upload for isolated VM-Fabric
+        uses: actions/upload-artifact@v4
+        with:
+          name: aupe-wg-tools-debian13
+          path: |
+            output/aupe-wg-tools-debian13.tar.gz
+            output/aupe-wg-tools-debian13.tar.gz.sha256
+          compression-level: 0
+          retention-days: 30
