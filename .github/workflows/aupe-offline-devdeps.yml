@@ -1,0 +1,45 @@
+name: AUPE Debian 13 offline kernel build dependencies
+
+on:
+  push:
+    paths:
+      - '.github/workflows/aupe-offline-devdeps.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  devdeps:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Download pinned Debian 13 toolchain and matching kernel headers
+        run: |
+          set -Eeuo pipefail
+          mkdir -p output/debs
+          docker run --rm --platform linux/amd64 -v "$PWD/output/debs:/out" debian:13 bash -Eeuo pipefail -c '
+            rm -f /etc/apt/apt.conf.d/docker-clean
+            apt-get update
+            apt-cache policy linux-headers-6.12.113+deb13-amd64
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --download-only --no-install-recommends \
+              linux-headers-6.12.113+deb13-amd64 \
+              build-essential kmod iproute2 ethtool python3
+            cp -v /var/cache/apt/archives/*.deb /out/
+            cd /out
+            sha256sum *.deb > SHA256SUMS
+            printf "6.12.113+deb13-amd64\n" > TARGET_KERNEL
+          '
+          test -s output/debs/SHA256SUMS
+          (cd output/debs && sha256sum -c SHA256SUMS)
+          tar -C output -czf output/aupe-debian13-offline-devdeps.tar.gz debs
+          (cd output && sha256sum aupe-debian13-offline-devdeps.tar.gz > aupe-debian13-offline-devdeps.tar.gz.sha256)
+      - name: Publish portable offline dependency bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: aupe-debian13-offline-devdeps
+          path: |
+            output/aupe-debian13-offline-devdeps.tar.gz
+            output/aupe-debian13-offline-devdeps.tar.gz.sha256
+          retention-days: 30
+          compression-level: 0
