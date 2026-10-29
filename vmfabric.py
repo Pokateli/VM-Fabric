@@ -70,7 +70,7 @@ def launch(args):
             ["sha512sum", "-c", "DEBIAN_IMAGE_SHA512SUMS"],
             [str(target / "lib/ld-linux-x86-64.so.2"), "--library-path",
              str(target / "lib"), str(target / "bin/qemu-img"),
-             "check", "-f", "qcow2", str(target / "debian13.qcow2")],
+             "check", "-f", "qcow2", str(target / p.get("base_disk", "debian13.qcow2"))],
         ]
         for check in checks:
             rc = subprocess.call(check, cwd=target)

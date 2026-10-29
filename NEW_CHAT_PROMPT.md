@@ -13,3 +13,5 @@
 6. Не путай ядро гостя с ядром хост-контейнера; не обещай постоянную VM в GitHub Actions. Windows/Tiny11 ещё экспериментальный профиль без готового образа.
 
 На GitHub отдельный workflow "Run VM (VM-Fabric)" исполняет команды на временном GitHub runner и выгружает результат в Actions artifacts. Все рабочие данные в work.qcow2 после завершения GitHub runner не сохраняются, если отдельно не экспортировать их.
+
+Для ARM64: выбери профиль `debian13-arm64`, релиз `debian13-arm64-v1.0.0-fabric`, артефакт `vm-fabric-debian13-arm64-image`. Проверь `uname -m` внутри VM (должно быть `aarch64`). Хост остаётся x86-64, ARM запускается через QEMU TCG и ARM UEFI.

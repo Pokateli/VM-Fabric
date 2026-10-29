@@ -20,6 +20,17 @@ class ProfilesTest(unittest.TestCase):
         self.assertIn("github", p["runtime"])
         self.assertTrue(vmfabric.script_path(p, folder, "run_script").is_file())
 
+    def test_arm64_profile_on_x86_host(self):
+        p, folder = vmfabric.load_profile("debian13-arm64")
+        self.assertEqual(p["architecture"], "aarch64")
+        self.assertEqual(p["host_architecture"], "x86_64")
+        self.assertEqual(p["base_disk"], "debian13-arm64.qcow2")
+        self.assertEqual(p["status"], "ready")
+        self.assertEqual(p["release_tag"], "debian13-arm64-v1.0.0-fabric")
+        self.assertEqual(set(p["runtime"]), {"chat", "github"})
+        for key in ("build_script", "bootstrap_script", "run_script", "smoke_script"):
+            self.assertTrue(vmfabric.script_path(p, folder, key).is_file())
+
     def test_tiny11_is_intentionally_disabled(self):
         p, _ = vmfabric.load_profile("tiny11")
         with self.assertRaisesRegex(ValueError, "execution disabled"):

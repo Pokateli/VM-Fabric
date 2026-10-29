@@ -1,0 +1,72 @@
+name: Build Debian 13 ARM64 image (VM-Fabric)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'profiles/debian13-arm64/**'
+      - 'vmfabric.py'
+      - '.github/workflows/build-debian13-arm64.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vm-fabric-debian13-arm64-image
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check migrated scripts and profile
+        run: |
+          set -Eeuo pipefail
+          bash -n profiles/debian13-arm64/scripts/build.sh
+          bash -n profiles/debian13-arm64/scripts/bootstrap.sh
+          bash -n profiles/debian13-arm64/scripts/prepare-guest.sh
+          bash -n profiles/debian13-arm64/scripts/run-vm.sh
+          bash -n profiles/debian13-arm64/scripts/smoke-test.sh
+          python3 -m py_compile vmfabric.py profiles/debian13-arm64/scripts/*.py
+          python3 vmfabric.py list
+          python3 vmfabric.py info debian13-arm64
+      - name: Build compressed Debian 13 ARM64 and portable x86_64 QEMU-AArch64
+        run: |
+          mkdir -p output
+          python3 vmfabric.py build debian13-arm64 --output-dir output
+      - name: Verify ARM64 image and unattended aarch64 root console
+        run: |
+          set -Eeuo pipefail
+          (cd output && sha256sum -c debian13-arm64-qemu-bundle.tar.gz.sha256)
+          (cd output/debian13-arm64-qemu-bundle && sha256sum -c SHA256SUMS && sha512sum -c DEBIAN_IMAGE_SHA512SUMS)
+          bash profiles/debian13-arm64/scripts/smoke-test.sh output/debian13-arm64-qemu-bundle output/boot.log
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-fabric-debian13-arm64-image
+          path: |
+            output/debian13-arm64-qemu-bundle.tar.gz
+            output/debian13-arm64-qemu-bundle.tar.gz.sha256
+            output/boot.log
+          compression-level: 0
+          retention-days: 90
+      - name: Publish standalone VM-Fabric Debian release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+          tag='debian13-arm64-v1.0.0-fabric'
+          assets=(output/debian13-arm64-qemu-bundle.tar.gz output/debian13-arm64-qemu-bundle.tar.gz.sha256 output/boot.log)
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --target "$GITHUB_SHA" \
+              --title "VM-Fabric Debian 13 ARM64 v1.0.0" \
+              --notes "Preconfigured Debian 13 ARM64 root serial console on x86-64 via QEMU TCG, internally zlib-compressed QCOW2, portable QEMU/TCG, SHA checks; independent of the legacy repository."
+          fi

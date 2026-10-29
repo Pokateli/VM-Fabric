@@ -1,0 +1,34 @@
+{
+  "id": "debian13-arm64",
+  "name": "Debian GNU/Linux 13 (Trixie) ARM64 on x86-64",
+  "architecture": "aarch64",
+  "host_architecture": "x86_64",
+  "status": "ready",
+  "os": "debian",
+  "version": "13",
+  "driver": "qemu-tcg",
+  "machine": "virt",
+  "firmware": "QEMU_EFI.fd",
+  "serial_console": "ttyAMA0",
+  "build_script": "scripts/build.sh",
+  "bootstrap_script": "scripts/bootstrap.sh",
+  "run_script": "scripts/run-vm.sh",
+  "smoke_script": "scripts/smoke-test.sh",
+  "release_tag": "debian13-arm64-v1.0.0-fabric",
+  "bundle_asset": "debian13-arm64-qemu-bundle.tar.gz",
+  "base_disk": "debian13-arm64.qcow2",
+  "runtime": [
+    "chat",
+    "github"
+  ],
+  "default_memory_mb": 2048,
+  "default_vcpus": 2,
+  "guest_network": false,
+  "disk_format": "qcow2",
+  "compression": "zlib",
+  "notes": "AArch64 TCG emulation on an x86-64 Linux host; offline guest, serial root autologin, writable COW overlay",
+  "source_provenance": {
+    "upstream": "Debian official nocloud arm64",
+    "url": "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-nocloud-arm64.qcow2"
+  }
+}

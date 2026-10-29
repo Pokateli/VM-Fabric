@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       vm:
-        description: 'VM profile ID (currently debian13; other profiles added later)'
+        description: 'VM profile ID: debian13 or debian13-arm64'
         type: string
         required: true
         default: debian13
@@ -14,7 +14,7 @@ on:
         required: false
         default: ''
   workflow_run:
-    workflows: ['Build Debian 13 image (VM-Fabric)']
+    workflows: ['Build Debian 13 image (VM-Fabric)', 'Build Debian 13 ARM64 image (VM-Fabric)']
     types: [completed]
 
 permissions:
@@ -28,9 +28,9 @@ jobs:
   vm:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
-      VM_ID: ${{ inputs.vm || 'debian13' }}
+      VM_ID: ${{ inputs.vm || (github.event.workflow_run.name == 'Build Debian 13 ARM64 image (VM-Fabric)' && 'debian13-arm64') || 'debian13' }}
       VM_COMMAND: ${{ inputs.command || '' }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -76,7 +76,7 @@ jobs:
             --command "$VM_COMMAND" \
             --log "$PWD/output/guest-console.log" \
             --output "$PWD/output/guest-output.txt" \
-            --timeout 300
+            --timeout 600
       - name: Verify writable overlay
         if: success()
         run: |

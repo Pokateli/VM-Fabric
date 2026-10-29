@@ -89,3 +89,27 @@ Debian source was migrated from private `Pokateli/Debian13-ChatGPT-VM` (known-go
 ## Security limitations
 
 The Debian guest has passwordless root on a serial console. Its network is disabled (`-nic none`). Do not turn on its network or expose the root console to untrusted users without redesigning authentication. **Never supply secrets in workflow command inputs**: commands, guest console output, and GitHub artifacts may be visible to authorized repository users. All GitHub Actions runners are temporary, and no continuous cloud VM session is promised.
+
+
+## Debian 13 ARM64 (AArch64 guest on x86-64 host)
+
+The new independent profile `debian13-arm64` provides a Debian 13 **ARM64** guest using portable **x86-64 QEMU aarch64 TCG**, an ARM virtual machine (`-machine virt`), an official Debian nocloud ARM64 image, and bundled `QEMU_EFI.fd` firmware. No ARM host processor, KVM or guest networking is required. CPU emulation is slower than native x86-64 Debian.
+
+Build on GitHub Actions: **Build Debian 13 ARM64 image (VM-Fabric)**. The image is downloaded from official Debian, SHA512 checked, prepared for unattended root login on ARM serial `ttyAMA0`, internally recompressed with zlib QCOW2 clusters, boot tested and published as Release `debian13-arm64-v1.0.0-fabric` with asset `debian13-arm64-qemu-bundle.tar.gz`. The compressed base remains immutable; the first boot creates a writable `work.qcow2` overlay.
+
+Run via **Run VM (VM-Fabric)** with VM profile `debian13-arm64` and optional command `uname -m; id -u; uname -r`. The build smoke test insists that the guest reports `aarch64` and root UID 0; the unified runner uploads command output, full serial console, and overlay-check.txt.
+
+In a new ChatGPT sandbox, retrieve the **ARM64** release or workflow artifact (not the x86 Debian archive), then:
+
+```bash
+python3 vmfabric.py deploy debian13-arm64 \
+  --archive /mnt/data/vm-fabric-debian13-arm64-image.zip \
+  --target /mnt/data/vm-fabric/debian13-arm64
+python3 vmfabric.py verify debian13-arm64 \
+  --target /mnt/data/vm-fabric/debian13-arm64
+python3 vmfabric.py run debian13-arm64 --mode chat \
+  --target /mnt/data/vm-fabric/debian13-arm64
+```
+
+
+Use the *real* downloaded ZIP path; an interactive session begins automatically with root. To run one command and collect output, add `--command 'uname -m; id -u'`. The Linux host still reports x86-64; `uname -m` **inside the guest** must be `aarch64`.
