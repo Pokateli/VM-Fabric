@@ -2,6 +2,9 @@ name: Build original amneziawg-go for AUPE VM tests
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/aupe-amneziawg-go.yml'
 
 permissions:
   contents: read
