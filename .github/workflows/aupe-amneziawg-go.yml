@@ -34,7 +34,7 @@ jobs:
           cd ..
           chmod 755 output/amneziawg-go
           output/amneziawg-go --version
-          sha256sum output/amneziawg-go > output/SHA256SUMS
+          (cd output && sha256sum amneziawg-go > SHA256SUMS)
           (cd output && sha256sum -c SHA256SUMS)
       - name: Upload verified AWG client binary
         uses: actions/upload-artifact@v4
