@@ -1,0 +1,54 @@
+name: AUPE pinned AmneziaWG Go cold-start padding fix
+on:
+  push:
+    paths:
+      - '.github/workflows/aupe-amneziawg-coldstart-fix.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.0'
+          cache: false
+      - name: Checkout pinned original AmneziaWG Go
+        run: |
+          git clone https://github.com/amnezia-vpn/amneziawg-go.git upstream
+          git -C upstream checkout --detach b5928efb6ca19f0153958460c3d141f04abc5c2e
+          test "$(git -C upstream rev-parse HEAD)" = b5928efb6ca19f0153958460c3d141f04abc5c2e
+      - name: Patch stale S4/TUN read race
+        run: |
+          python3 tools/aupe/patch_tun_padding.py upstream/device/send.go
+          (cd upstream && gofmt -w device/send.go)
+          git -C upstream diff --check
+          mkdir -p output
+          git -C upstream diff > output/AMNEZIAWG_GO_S4_RACE.patch
+          test -s output/AMNEZIAWG_GO_S4_RACE.patch
+      - name: Compile-test and build patched Linux client
+        run: |
+          set -Eeuo pipefail
+          (cd upstream && go test ./device -run '^$')
+          (cd upstream && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o ../output/amneziawg-go-s4-fixed .)
+          chmod 755 output/amneziawg-go-s4-fixed
+          output/amneziawg-go-s4-fixed --version
+          cp upstream/LICENSE output/UPSTREAM_LICENSE
+          printf '%s\n' b5928efb6ca19f0153958460c3d141f04abc5c2e > output/UPSTREAM_COMMIT
+          cat > output/README.txt <<'README'
+          EXPERIMENTAL original amneziawg-go with one S4 stale-offset fix.
+          Built from upstream commit b5928efb6ca19f0153958460c3d141f04abc5c2e.
+          Only device/send.go RoutineReadFromTUN changed.
+          This is NOT an official upstream release.
+          Tested only in isolated VM-Fabric with AUPE.
+          README
+          (cd output && sha256sum amneziawg-go-s4-fixed AMNEZIAWG_GO_S4_RACE.patch > SHA256SUMS && sha256sum -c SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aupe-amneziawg-go-s4-coldstart-fixed
+          path: output/
+          compression-level: 0
+          retention-days: 30
