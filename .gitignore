@@ -1,0 +1,11 @@
+output/
+artifacts/
+*.qcow2
+*.qcow2.gz
+*.tar.gz
+*.tar.gz.sha256
+*.zip
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
