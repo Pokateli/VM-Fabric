@@ -1,0 +1,31 @@
+name: AUPE Python crypto offline dependencies
+on:
+  push:
+    paths:
+      - '.github/workflows/aupe-python-crypto.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download Debian 13 python3-cryptography and dependencies
+        run: |
+          set -Eeuo pipefail
+          mkdir -p output/debs
+          docker run --rm --platform linux/amd64 -v "$PWD/output/debs:/out" debian:13 bash -Eeuo pipefail -c '
+            rm -f /etc/apt/apt.conf.d/docker-clean
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --download-only --no-install-recommends python3-cryptography
+            cp -v /var/cache/apt/archives/*.deb /out/
+            (cd /out && sha256sum *.deb > SHA256SUMS)
+          '
+          (cd output/debs && sha256sum -c SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aupe-python-crypto-debian13-debs
+          path: output/debs
+          retention-days: 30
+          compression-level: 0
