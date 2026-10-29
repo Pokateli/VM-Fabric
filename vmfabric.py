@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""VM-Fabric: profile-based virtual machine orchestration (stdlib only)."""
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+PROFILES = ROOT / "profiles"
+
+
+def load_profile(profile_id):
+    if not profile_id or not profile_id.replace("-", "").replace("_", "").isalnum():
+        raise ValueError("Invalid profile ID")
+    folder = PROFILES / profile_id
+    manifest = folder / "profile.json"
+    if not manifest.is_file():
+        raise ValueError(f"Unknown profile: {profile_id}")
+    profile = json.loads(manifest.read_text(encoding="utf-8"))
+    if profile.get("id") != profile_id:
+        raise ValueError(f"Manifest ID mismatch: {profile_id}")
+    return profile, folder
+
+
+def script_path(profile, folder, key):
+    name = profile.get(key)
+    if not isinstance(name, str) or not name:
+        raise ValueError(f"{profile['id']} has no configured {key}")
+    path = (folder / name).resolve()
+    if not path.is_relative_to(folder.resolve()) or not path.is_file():
+        raise ValueError(f"Missing or unsafe {key}: {name}")
+    return path
+
+
+def ready(profile):
+    if profile.get("status") != "ready":
+        raise ValueError(f"Profile '{profile['id']}' is {profile.get('status')}; execution disabled")
+
+
+def default_target(profile_id):
+    return Path("/mnt/data/vm-fabric") / profile_id
+
+
+def launch(args):
+    p, folder = load_profile(args.profile)
+    if args.operation == "list":
+        raise AssertionError("list handled separately")
+    if args.operation == "info":
+        print(json.dumps(p, ensure_ascii=False, indent=2))
+        return 0
+    ready(p)
+    if args.operation == "deploy":
+        shell = script_path(p, folder, "bootstrap_script")
+        dest = args.target or default_target(args.profile)
+        return subprocess.call(["bash", str(shell), str(args.archive), str(dest)])
+    if args.operation == "build":
+        shell = script_path(p, folder, "build_script")
+        target = args.output_dir.resolve()
+        target.mkdir(parents=True, exist_ok=True)
+        env = os.environ.copy()
+        env["OUTPUT_DIR"] = str(target)
+        return subprocess.call(["bash", str(shell)], env=env, cwd=ROOT)
+    if args.operation == "verify":
+        target = (args.target or default_target(args.profile)).resolve()
+        if not (target / "DEBIAN_IMAGE_SHA512SUMS").is_file():
+            raise ValueError(f"Missing VM base image at {target}")
+        checks = [
+            ["sha512sum", "-c", "DEBIAN_IMAGE_SHA512SUMS"],
+            [str(target / "lib/ld-linux-x86-64.so.2"), "--library-path",
+             str(target / "lib"), str(target / "bin/qemu-img"),
+             "check", "-f", "qcow2", str(target / "debian13.qcow2")],
+        ]
+        for check in checks:
+            rc = subprocess.call(check, cwd=target)
+            if rc != 0:
+                return rc
+        return 0
+    if args.operation == "run":
+        mode = args.mode
+        if mode != "auto" and mode not in p.get("runtime", []):
+            raise ValueError(f"{args.profile} does not support runtime {mode}")
+        shell = script_path(p, folder, "run_script")
+        target = (args.target or default_target(args.profile)).resolve()
+        cmd = ["bash", str(shell), "--mode", mode, "--bundle", str(target),
+               "--timeout", str(args.timeout)]
+        if args.command is not None:
+            cmd.extend(["--command", args.command])
+        if args.script is not None:
+            cmd.extend(["--script", str(args.script.resolve())])
+        if args.log is not None:
+            cmd.extend(["--log", str(args.log.resolve())])
+        if args.output is not None:
+            cmd.extend(["--output", str(args.output.resolve())])
+        return subprocess.call(cmd)
+    raise ValueError(f"Unsupported operation: {args.operation}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="operation", required=True)
+    sub.add_parser("list", help="List installed VM profiles and maturity")
+    info = sub.add_parser("info", help="Show a profile JSON manifest")
+    info.add_argument("profile")
+    deploy = sub.add_parser("deploy", help="Verify/unpack an artifact in the current environment")
+    deploy.add_argument("profile")
+    deploy.add_argument("--archive", type=Path, required=True)
+    deploy.add_argument("--target", type=Path)
+    build = sub.add_parser("build", help="Build an image from migrated sources (Docker on build host)")
+    build.add_argument("profile")
+    build.add_argument("--output-dir", type=Path, required=True)
+    verify = sub.add_parser("verify", help="Validate the deployed base QCOW2")
+    verify.add_argument("profile")
+    verify.add_argument("--target", type=Path)
+    run = sub.add_parser("run", help="Boot guest in ChatGPT/local or GitHub Actions")
+    run.add_argument("profile")
+    run.add_argument("--target", type=Path)
+    run.add_argument("--mode", choices=["auto", "chat", "github"], default="auto")
+    payload = run.add_mutually_exclusive_group()
+    payload.add_argument("--command")
+    payload.add_argument("--script", type=Path)
+    run.add_argument("--log", type=Path)
+    run.add_argument("--output", type=Path)
+    run.add_argument("--timeout", type=int, default=240)
+    args = parser.parse_args()
+    try:
+        if args.operation == "list":
+            for manifest in sorted(PROFILES.glob("*/profile.json")):
+                data = json.loads(manifest.read_text(encoding="utf-8"))
+                print(f"{data['id']:<14} {data['status']:<14} {data['name']}")
+            return 0
+        return launch(args)
+    except (ValueError, OSError, json.JSONDecodeError) as exc:
+        print(f"VM-Fabric: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

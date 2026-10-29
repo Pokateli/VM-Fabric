@@ -1,0 +1,16 @@
+{
+  "id": "tiny11",
+  "name": "Windows 11 Tiny11 (experimental)",
+  "architecture": "x86_64",
+  "status": "experimental",
+  "os": "windows",
+  "version": "11",
+  "driver": "qemu-tcg",
+  "runtime": [],
+  "guest_network": false,
+  "disk_format": "qcow2",
+  "source_provenance": {
+    "repository": "Pokateli/Temp",
+    "note": "Under development. No tested image or launch profile has been migrated."
+  }
+}

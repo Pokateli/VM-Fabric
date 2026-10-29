@@ -1,0 +1,29 @@
+{
+  "id": "debian13",
+  "name": "Debian 13 (Trixie)",
+  "architecture": "x86_64",
+  "status": "ready",
+  "os": "debian",
+  "version": "13",
+  "driver": "qemu-tcg",
+  "build_script": "scripts/build.sh",
+  "bootstrap_script": "scripts/bootstrap.sh",
+  "run_script": "scripts/run-vm.sh",
+  "smoke_script": "scripts/smoke-test.sh",
+  "release_tag": "debian13-v1.2.0-fabric",
+  "bundle_asset": "debian13-qemu-bundle.tar.gz",
+  "runtime": [
+    "chat",
+    "github"
+  ],
+  "default_memory_mb": 2048,
+  "default_vcpus": 2,
+  "guest_network": false,
+  "disk_format": "qcow2",
+  "compression": "zlib",
+  "source_provenance": {
+    "repository": "Pokateli/Debian13-ChatGPT-VM",
+    "source_release": "vm-v1.2.0",
+    "migration_date": "2026-10-29"
+  }
+}

@@ -1,0 +1,23 @@
+name: Validate VM-Fabric registry and scripts
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-unit-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Python and shell scripts
+        run: |
+          set -Eeuo pipefail
+          python3 -m compileall -q vmfabric.py profiles/debian13/scripts tests
+          for script in profiles/debian13/scripts/*.sh; do bash -n "$script"; done
+      - name: Validate profiles and CLI
+        run: python3 -m unittest discover -s tests -v
