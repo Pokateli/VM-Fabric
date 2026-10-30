@@ -23,9 +23,10 @@ def prepare(root, session):
     session=session.resolve()
     base=root/"build/userdata-arm64.qcow2"
     ramdisk=root/"build/ramdisk-wrap.img"
+    dex=root/"build/dex"
     kit_emulator=root/"sdk/emulator/qemu/linux-x86_64/qemu-system-aarch64-headless"
-    if not all(p.is_file() for p in (base,ramdisk,kit_emulator)):
-        raise ValueError("Missing full restored ARM64 kit (data, ramdisk, emulator)")
+    if not all(p.is_file() for p in (base,ramdisk,kit_emulator,dex/"stub.dex",dex/"wdctl.dex")):
+        raise ValueError("Missing full restored ARM64 kit (data, ramdisk, DEX helpers, emulator)")
     sdkprops=root/"sdk/system-images/android-28/google_apis/arm64-v8a/source.properties"
     if not sdkprops.is_file() or "SystemImage.Abi=arm64-v8a" not in sdkprops.read_text():
         raise ValueError("Refuse non-ARM64 system image")
@@ -45,6 +46,12 @@ def prepare(root, session):
     try:
         output.mkdir(parents=True)
         (output/"ramdisk-wrap.img").symlink_to(ramdisk)
+        # 40-bringup.sh expects the already-compiled media stub and watchdog.
+        # Reusing their immutable DEX files avoids needing a JDK in ChatGPT.
+        (output/"dex").symlink_to(dex,target_is_directory=True)
+        oat=root/"build/oat"
+        if oat.is_dir():
+            (output/"oat").symlink_to(oat,target_is_directory=True)
         overlay=output/"userdata-arm64.qcow2"
         subprocess.run(["qemu-img","create","-f","qcow2","-F","qcow2","-b",str(base),str(overlay)],
                        check=True,timeout=120)
