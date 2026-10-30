@@ -1,3 +1,20 @@
+## 2026-10-30 — CONFIRMED Android ARM64 systemReady on real TCG; GUI next
+
+[GitHub Actions #41120493624](https://github.com/Pokateli/VM-Fabric/actions/runs/41120493624) is the **first successful real ARM64 Android PackageManager / systemReady run**. The workflow job ultimately failed **after** this milestone during kit packaging, so do not describe the entire job as successful.
+
+Immutable evidence downloaded directly from Actions artifact #13008991563 (\`vm-fabric-android-arm64-tcg-proof\`):
+- \`RESULT.txt\`: \`PASS_REAL_ANDROID_ARM64_TCG_BOOT\`
+- \`android-properties.txt\`: \`ANDROID_ABI=arm64-v8a\`
+- \`package-service.txt\`: \`Service package: found\`
+- \`boot-gate-result.txt\`: \`ANDROID_BRINGUP_RETURNED_SUCCESS\`
+- Runner log: \`READY: package service up (systemReady reached)\` and Android SDK API 28 on true QEMU TCG without KVM.
+- ADB screencap \`android-screen.png\` exists and is 320x480 RGBA, 1662 bytes. **The actual framebuffer is entirely black** (all RGB values zero), so this is NOT proof of Launcher/desktop UI. The old code only checked the PNG header, hence incorrectly reported \`PASS real Android framebuffer PNG\`.
+
+The post-boot pack step failed because the root-started emulator created a transient SDK file \`bootcompleted.ini\` that the unprivileged packer could not read (\`PermissionError\`). The portable-kit filter now excludes it and other emulator runtime lock files. A new \`inspect-gui.py\` runs local ADB wake/HOME/activity/SurfaceFlinger checks, captures framebuffer twice, decodes PNG filters via stdlib, and records \`BLACK_FRAMEBUFFER\` rather than claiming success on valid but empty PNG. A clean \`adb sync\` plus guest poweroff / QEMU stop is requested **before** backing up live \`userdata-arm64.qcow2\`; \`qemu-img check\` gates packing.
+
+[Full follow-up workflow #41122478374](https://github.com/Pokateli/VM-Fabric/actions/runs/41122478374) was queued at last observation. Do NOT mark a portable private kit complete until that workflow actually uploads \`vm-fabric-android-arm64-private-kit\` and passes its SHA256 proof. Development profile is still experimental until Launcher UI proof and reproducible restore pass.
+
+---
 ## 2026-10-30 evening — real Android ARM64 ADB connected; upstream timeout bug fixed
 
 Real [GitHub boot #41064708650](https://github.com/Pokateli/VM-Fabric/actions/runs/41064708650) completed **failure** after fixing the earlier SELinux restorecon failure. This was **not another guest kernel failure**. Both primary job logs and the downloaded `vm-fabric-android-arm64-tcg-proof` artifact were inspected:
