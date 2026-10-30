@@ -1,3 +1,18 @@
+## 2026-10-30 evening — real Android ARM64 ADB connected; upstream timeout bug fixed
+
+Real [GitHub boot #41064708650](https://github.com/Pokateli/VM-Fabric/actions/runs/41064708650) completed **failure** after fixing the earlier SELinux restorecon failure. This was **not another guest kernel failure**. Both primary job logs and the downloaded `vm-fabric-android-arm64-tcg-proof` artifact were inspected:
+
+- `-selinux permissive` applied successfully to the pinned 37.3.3 Android Emulator.
+- Guest kernel mounted the actual ARM64 system/vendor, Android first-stage init continued into second-stage init.
+- Guest launched `surfaceflinger`, `adbd`, `bootanim`, and many other init services.
+- `boot-monitor.log` recorded **`ADB_STATE=device`** at ~45s and **`ro.product.cpu.abi=arm64-v8a`** from the real running guest. **This is the first confirmed real ADB connection to Android ARM64 in VM-Fabric.**
+- The upstream host bring-up script then exited code 127 at `timeout: failed to run command 'adbx': No such file or directory`. Exact cause: `adbx()` is a POSIX shell function in `scripts/lib/common.sh`, but GNU `timeout` can execute only external binaries. The two offending sites were `timeout 60 adbx root` and `timeout 300 adbx wait-for-device`. The first command swallowed exit 127 with `|| true`, the second aborted.
+- **Fix:** new `profiles/android-arm64/scripts/patch-bringup-adb.py` verifies/replaces the two exact sites with `timeout ... "$ADB_BIN" -s "$SERIAL" ...`; the patch is idempotent and refuses unknown upstream changes. It is invoked immediately after cloning the exact pinned revision and before downloading the SDK.
+- **Regression:** [GitHub #41120272947](https://github.com/Pokateli/VM-Fabric/actions/runs/41120272947) completed **success, 24/24 tests**, including an executable mock ADB verification.
+- [Full TCG boot #41120204233](https://github.com/Pokateli/VM-Fabric/actions/runs/41120204233) was at SDK download on last inspection. The latest committed workflow also includes private streaming image packaging **only if** `PASS_REAL_ANDROID_ARM64_TCG_BOOT`, `ANDROID_ABI=arm64-v8a` and `Service package: found` all exist. A transient malformed YAML due to string replacement was corrected; [run #41120493624](https://github.com/Pokateli/VM-Fabric/actions/runs/41120493624) is the validated follow-up pipeline.
+- **Still unconfirmed:** `service check package` after the Android zygote/media stub restart; Android Launcher GUI framebuffer; disk persistence; reduced-RAM operation inside ChatGPT. The profile remains `experimental` and disabled for regular run.
+
+---
 ## 2026-10-30 — Root-cause confirmed from actual two failed guest boots
 
 **Real failure evidence, not a slow/blocked ADB alone:** both [#41042485490](https://github.com/Pokateli/VM-Fabric/actions/runs/41042485490) and [#41038844377](https://github.com/Pokateli/VM-Fabric/actions/runs/41038844377) exited with `failure` after ~57 minutes. Independently downloaded and inspected the attached `emulator-tail.log` and `boot-monitor.log`. Actual ARM64 Linux 4.4.302 kernel boots, mounts `vda1` as system and `vde` as vendor, Android first-stage init starts, loads precompiled vendor SELinux policy and switches to enforcing (`enforcing=1 old_enforcing=0`). Then:
