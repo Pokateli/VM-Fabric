@@ -133,6 +133,10 @@ def deploy(source, dest):
             finally:
                 temp.unlink(missing_ok=True)
             print(f"VERIFIED {member.name}: {member.size} bytes", flush=True)
+    # tarfile may stop at the first end-of-archive block without consuming
+    # trailing padding. Drain it so the final shard checksum is still checked.
+    while stream.read(4 * 1024 * 1024):
+        pass
     if seen != FILES or stream.position != len(index["parts"]):
         raise ValueError("Incomplete Tiny11 transport")
     print("DEPLOYED Tiny11 ready disk from verified shards")
