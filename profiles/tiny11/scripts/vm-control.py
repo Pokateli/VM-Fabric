@@ -47,12 +47,15 @@ def talk(address: Path, command: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("status", "screenshot", "wake", "powerdown", "sendkey"))
+    parser.add_argument("action", choices=("status", "screenshot", "wake", "powerdown", "sendkey", "mousemove", "mousedown", "mouseup", "click"))
     parser.add_argument("--vm-dir", type=Path, default=Path("/mnt/data/tiny11-ready"))
     parser.add_argument("--monitor", type=Path,
                         help="Unix monitor path, otherwise use VM directory qemu-monitor.sock")
     parser.add_argument("--output", type=Path, help="PNG/PPM screenshot output")
     parser.add_argument("--keys", help="QEMU key combination, e.g. ctrl-esc or meta_l-r")
+    parser.add_argument("--dx", type=int, default=0, help="Relative mouse X movement")
+    parser.add_argument("--dy", type=int, default=0, help="Relative mouse Y movement")
+    parser.add_argument("--button", choices=("left", "middle", "right"), default="left")
     args = parser.parse_args()
     root = args.vm_dir.resolve()
     addr = (args.monitor or root / "qemu-monitor.sock").resolve()
@@ -73,6 +76,22 @@ def main() -> None:
         if not args.keys or not re.fullmatch(r"[A-Za-z0-9_+.-]{1,128}",args.keys):
             parser.error("--keys must contain a valid QEMU key combination")
         print(talk(addr, "sendkey "+args.keys))
+        return
+    if args.action in ("mousemove", "mousedown", "mouseup", "click"):
+        if not (-3000 <= args.dx <= 3000 and -3000 <= args.dy <= 3000):
+            parser.error("mouse movement must be in -3000..3000 pixels")
+        state={"left":1, "middle":2, "right":4}[args.button]
+        if args.action == "mousemove":
+            print(talk(addr, f"mouse_move {args.dx} {args.dy}"))
+        elif args.action == "mouseup":
+            print(talk(addr, "mouse_button 0"))
+        elif args.action == "mousedown":
+            print(talk(addr, f"mouse_button {state}"))
+        elif args.action == "click":
+            if args.dx or args.dy:
+                talk(addr, f"mouse_move {args.dx} {args.dy}")
+            talk(addr, f"mouse_button {state}")
+            print(talk(addr, "mouse_button 0"))
         return
     output = (args.output or root / "tiny11-desktop.png").resolve()
     if output.suffix.lower() not in (".png", ".ppm"):
