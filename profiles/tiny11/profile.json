@@ -1,16 +1,31 @@
 {
   "id": "tiny11",
-  "name": "Windows 11 Tiny11 (experimental)",
+  "name": "Windows 11 Tiny11 (offline UEFI/QEMU)",
   "architecture": "x86_64",
-  "status": "experimental",
+  "status": "ready",
   "os": "windows",
-  "version": "11",
-  "driver": "qemu-tcg",
-  "runtime": [],
+  "version": "11 Enterprise Evaluation",
+  "driver": "qemu-tcg / qemu-kvm",
+  "runtime": [
+    "chat",
+    "github"
+  ],
   "guest_network": false,
   "disk_format": "qcow2",
+  "compression": "zstd",
+  "base_disk": "tiny11-ready-zstd.qcow2",
+  "bootstrap_script": "scripts/bootstrap.sh",
+  "verify_script": "scripts/verify.py",
+  "run_script": "scripts/run-vm.sh",
+  "console_script": "scripts/vm-control.py",
+  "reference_run": "40928819947",
+  "reference_sha256": "9d6b897b3ba5326b6de380b8ef48898c5c9f561b65e4b44507eb713e4300d402",
   "source_provenance": {
     "repository": "Pokateli/Temp",
-    "note": "Under development. No tested image or launch profile has been migrated."
-  }
+    "workflow_run": "40928819947",
+    "image_artifacts": "tiny11-ready-public-index and tiny11-ready-public-shard-000 through -019",
+    "qemu_runtime_run": "41013832628",
+    "evidence": "Actual first and second boot under GitHub KVM, graphical desktop confirmed in ChatGPT TCG 2026-10-30"
+  },
+  "notes": "Offline evaluation OS; no commercial license implied. Use a licensed Windows image for production."
 }
