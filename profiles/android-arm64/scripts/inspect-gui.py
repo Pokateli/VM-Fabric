@@ -66,6 +66,27 @@ def inspect_png(data):
     return {"width":w,"height":h,"visible_pixels":visible,
             "distinct_sample_colors":len(colors),"all_black":visible==0}
 
+def classify_gui(observations, stats):
+    """Home evidence requires usable Android services, real Launcher3 and colors.
+
+    This is stronger than checking PNG signature, but final proof remains
+    a human-verified genuine ADB screenshot.
+    """
+    by_name={x.get("check"):x for x in observations}
+    def ok(name,predicate):
+        item=by_name.get(name,{})
+        return item.get("exit")==0 and predicate(item.get("stdout",""))
+    return ("LAUNCHER_HOME_EVIDENCE" if
+        ok("boot_completed",lambda v:v.strip()=="1") and
+        ok("surfaceflinger",lambda v:"Service SurfaceFlinger: found" in v) and
+        ok("display",lambda v:"Physical size:" in v) and
+        ok("launcher_resolution",lambda v:"com.android.launcher3/.Launcher" in v) and
+        ok("home_launch",lambda v:"Starting: Intent" in v) and
+        not stats.get("all_black",True) and stats.get("visible_pixels",0)>5000 and
+        stats.get("distinct_sample_colors",0)>=12 else
+        "VISIBLE_FRAMEBUFFER_NOT_PROVEN_LAUNCHER")
+
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--sdk-root",type=Path,required=True)
@@ -111,7 +132,7 @@ def main():
             try:
                 stats=inspect_png(data)
                 log.update(stats)
-                status="BLACK_FRAMEBUFFER" if stats["all_black"] else "VISIBLE_FRAMEBUFFER_NOT_PROVEN_LAUNCHER"
+                status="BLACK_FRAMEBUFFER" if stats["all_black"] else classify_gui(logs,stats)
                 if not stats["all_black"]:
                     logs.append(log)
                     break
