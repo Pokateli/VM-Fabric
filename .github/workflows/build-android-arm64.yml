@@ -160,7 +160,7 @@ jobs:
                 echo "NO_GUI_PROOF yet; systemReady is a separate gate" | tee "$2/GUI_RESULT.txt"
               fi
             ' _ "$RUNNER_TEMP/android-arm-tcg" "$GITHUB_WORKSPACE/android-arm64-proof"
-      - name: Package privately verified Android ARM64 VM kit (only after real ADB systemReady)
+      - name: Package privately verified Android ARM64 VM kit (only after actual ADB readiness)
         if: success()
         shell: bash
         timeout-minutes: 30
@@ -169,28 +169,7 @@ jobs:
           test -s android-arm64-proof/RESULT.txt
           grep -Fxq 'PASS_REAL_ANDROID_ARM64_TCG_BOOT' android-arm64-proof/RESULT.txt
           grep -Fxq 'ANDROID_ABI=arm64-v8a' android-arm64-proof/android-properties.txt
-          grep -Eiq '^Service package: found[[:space:]]*
-        shell: bash
-        run: |
-          set +e
-          mkdir -p android-arm64-proof
-          if [ -f "$RUNNER_TEMP/android-arm-build/emu.log" ]; then
-            tail -c 8388608 "$RUNNER_TEMP/android-arm-build/emu.log" > android-arm64-proof/emulator-tail.log
-          fi
-          if [ -f "$RUNNER_TEMP/android-arm-build/qemu.pid" ]; then
-            pid=$(cat "$RUNNER_TEMP/android-arm-build/qemu.pid")
-            kill "$pid" 2>/dev/null || true
-          fi
-          df -h . > android-arm64-proof/disk-after.txt
-      - uses: actions/upload-artifact@v4
-        name: Publish ARM64 guest boot evidence (not the Google image)
-        if: always()
-        with:
-          name: vm-fabric-android-arm64-tcg-proof
-          path: android-arm64-proof/
-          retention-days: 14
-          if-no-files-found: warn
- android-arm64-proof/package-service.txt
+          grep -Eiq '^Service package: found[[:space:]]*$' android-arm64-proof/package-service.txt
           root="$RUNNER_TEMP/android-portable-source"
           mkdir -p "$root"
           ln -s "$RUNNER_TEMP/android-sdk-arm64" "$root/sdk"
@@ -199,7 +178,7 @@ jobs:
           ln -s "$GITHUB_WORKSPACE/android-arm64-proof" "$root/proof"
           python3 profiles/android-arm64/scripts/portable-kit.py pack "$root" "$RUNNER_TEMP/android-arm64-parts"
           test -s "$RUNNER_TEMP/android-arm64-parts/android-arm64-parts.json"
-      - name: Publish private verified Android ARM64 TCG kit (never publicly)
+      - name: Publish private verified Android ARM64 kit
         if: success()
         uses: actions/upload-artifact@v4
         with:
