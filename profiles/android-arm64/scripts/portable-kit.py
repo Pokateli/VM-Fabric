@@ -27,6 +27,7 @@ REQUIRED = (
     "proof/android-properties.txt",
     "proof/package-service.txt",
     "proof/STABILITY_RESULT.txt",
+    "proof/GUI_RESULT.txt",
     "proof/stability-report.json",
     "sdk/system-images/android-28/google_apis/arm64-v8a/system.img",
     "sdk/system-images/android-28/google_apis/arm64-v8a/vendor.img",
@@ -165,6 +166,8 @@ def verify_input(root):
             not re.fullmatch(r"Service package: found\s*",item.get("package",{}).get("stdout",""))
             for item in obs)):
         raise ValueError("Refuse to pack without five real stable ARM64 ADB service samples")
+    if (root/"proof/GUI_RESULT.txt").read_text().strip()!="LAUNCHER_HOME_EVIDENCE":
+        raise ValueError("Refuse to package Android without evidence of working Launcher3 UI")
     props=(root/"sdk/system-images/android-28/google_apis/arm64-v8a/source.properties").read_text()
     metadata=dict(s.strip().split("=",1) for s in props.splitlines() if "=" in s)
     if (metadata.get("AndroidVersion.ApiLevel")!="28" or
