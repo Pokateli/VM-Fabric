@@ -24,6 +24,8 @@ PARTS=(
  "build/userdata-arm64.qcow2",
  "upstream-src/scripts/40-bringup.sh",
  "proof/RESULT.txt",
+ "proof/android-properties.txt",
+ "proof/package-service.txt",
 )
 PROPS="AndroidVersion.ApiLevel=28\nSystemImage.Abi=arm64-v8a\nSystemImage.TagId=google_apis\n"
 
@@ -41,6 +43,8 @@ class AndroidPortableKitTests(unittest.TestCase):
             if name.endswith("source.properties"):payload=PROPS.encode()
             if name.endswith("emulator/.pinned"):payload=b"16489710\n"
             if name.endswith("proof/RESULT.txt"):payload=b"PASS_REAL_ANDROID_ARM64_TCG_BOOT\n"
+            if name.endswith("proof/android-properties.txt"):payload=b"ANDROID_ABI=arm64-v8a\n"
+            if name.endswith("proof/package-service.txt"):payload=b"Service package: found\n"
             target.write_bytes(payload)
         # Root model contains a private SDK cache which must not be transported.
         (self.src/"sdk/dl").mkdir()
@@ -69,6 +73,12 @@ class AndroidPortableKitTests(unittest.TestCase):
         x=self.call("pack",self.src,self.chunks)
         self.assertNotEqual(x.returncode,0)
         self.assertIn("Refuse to pack Android",x.stderr)
+
+    def test_refuses_forged_marker_without_real_adb_evidence(self):
+        (self.src/"proof/package-service.txt").write_text("Service package: not found\n")
+        x=self.call("pack",self.src,self.chunks)
+        self.assertNotEqual(x.returncode,0)
+        self.assertIn("package-service evidence",x.stderr)
 
     def test_refuses_wrong_abi(self):
         p=self.src/"sdk/system-images/android-28/google_apis/arm64-v8a/source.properties"
