@@ -1,0 +1,85 @@
+name: Import Tiny11 into private VM-Fabric Release
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/import-tiny11-release.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: vm-fabric-tiny11-release
+  cancel-in-progress: false
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    env:
+      GH_TOKEN: ${{ secrets.TEMP_READ_TOKEN || github.token }}
+      TAG: tiny11-v1.0.0-fabric
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require private repository and clear unused runner tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test '${{ github.repository }}' = 'Pokateli/VM-Fabric'
+          test '${{ github.event.repository.private }}' = true
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          df -h .
+      - name: Download 20 verified ready shards from public Temp run
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/temp-shards"
+          gh run download 40928819947 --repo Pokateli/Temp --pattern 'tiny11-ready-public-*' --dir "$RUNNER_TEMP/temp-shards"
+          mkdir -p "$RUNNER_TEMP/release-parts"
+          find "$RUNNER_TEMP/temp-shards" -type f \( -name 'part-*.bin' -o -name 'ready-parts.json' \) -print0 |
+            while IFS= read -r -d '' file; do mv -n "$file" "$RUNNER_TEMP/release-parts/$(basename "$file")"; done
+      - name: Independently SHA256-check all shards and base identity
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json,os
+          root=Path(os.environ['RUNNER_TEMP'])/'release-parts'
+          j=json.loads((root/'ready-parts.json').read_text())
+          assert j['format']=='tiny11-ready-public-parts-v1' and j['unencrypted']
+          assert len(j['parts'])==20
+          assert j['members']['tiny11-ready-zstd.qcow2']['sha256']=='9d6b897b3ba5326b6de380b8ef48898c5c9f561b65e4b44507eb713e4300d402'
+          for i,part in enumerate(j['parts']):
+              assert part['name']==f'part-{i:03d}.bin'
+              p=root/part['name']
+              assert p.stat().st_size==part['size']
+              h=hashlib.sha256()
+              with p.open('rb') as f:
+                  for block in iter(lambda:f.read(8*1024*1024),b''): h.update(block)
+              assert h.hexdigest()==part['sha256'],part['name']
+              print('Verified shard',i+1,flush=True)
+          print('PASS: full original ready-image transport verified')
+          PY
+      - name: Upload to private draft release, then publish only if complete
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --prerelease \
+              --title 'Tiny11 VM-Fabric v1.0.0 (Windows Evaluation)' \
+              --notes 'Private backup of verified Tiny11 GUI QCOW2 shards from Temp run 40928819947. Evaluation license expired; use only where appropriately licensed.'
+          fi
+          gh release upload "$TAG" "$RUNNER_TEMP/release-parts/ready-parts.json" --repo "$GITHUB_REPOSITORY" --clobber
+          for i in $(seq -w 0 19); do
+            gh release upload "$TAG" "$RUNNER_TEMP/release-parts/part-0${i}.bin" --repo "$GITHUB_REPOSITORY" --clobber
+          done
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets > "$RUNNER_TEMP/assets.json"
+          python3 - <<'PY'
+          import json,os
+          items=json.load(open(os.environ['RUNNER_TEMP']+'/assets.json'))['assets']
+          names={x['name'] for x in items}
+          expected={'ready-parts.json'}|{f'part-{i:03d}.bin' for i in range(20)}
+          assert expected <= names, expected-names
+          print('PASS 21 private release assets present')
+          PY
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          echo 'Private ready image release published successfully'
