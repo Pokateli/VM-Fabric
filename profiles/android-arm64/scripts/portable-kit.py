@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import shutil
 import tarfile
@@ -134,7 +135,7 @@ def verify_input(root):
     # ABI property and a real PackageManager service response as well.
     abi=(root/"proof/android-properties.txt").read_text().strip()
     pkg=(root/"proof/package-service.txt").read_text()
-    if abi!="ANDROID_ABI=arm64-v8a" or "found" not in pkg.lower():
+    if abi!="ANDROID_ABI=arm64-v8a" or not re.search(r"(?im)^\s*Service\s+package:\s+found\s*$",pkg):
         raise ValueError("Refuse to pack Android without matching ADB ABI and package-service evidence")
     props=(root/"sdk/system-images/android-28/google_apis/arm64-v8a/source.properties").read_text()
     metadata=dict(s.strip().split("=",1) for s in props.splitlines() if "=" in s)
