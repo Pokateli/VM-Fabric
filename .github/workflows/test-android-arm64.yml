@@ -5,7 +5,7 @@ on:
     paths:
       - 'profiles/android-arm64/**'
       - 'vmfabric.py'
-      - 'tests/test_android_arm64.py'
+      - 'tests/test_android_*.py'
       - '.github/workflows/test-android-arm64.yml'
   workflow_dispatch:
 permissions:
