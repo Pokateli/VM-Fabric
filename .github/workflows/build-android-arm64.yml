@@ -65,6 +65,14 @@ jobs:
           test "$(git rev-parse HEAD)" = "$ANDROID_TOOLKIT_REV"
           mkdir -p "$GITHUB_WORKSPACE/android-arm64-proof"
           git rev-parse HEAD > "$GITHUB_WORKSPACE/android-arm64-proof/upstream-revision.txt"
+          # The pinned upstream uses a shell function 'adbx'; GNU timeout
+          # cannot execute it as a program (exit 127), even after real ADB is
+          # online. Patch ONLY the two verified timeout sites before SDK work.
+          python3 "$GITHUB_WORKSPACE/profiles/android-arm64/scripts/patch-bringup-adb.py" scripts/40-bringup.sh |
+            tee "$GITHUB_WORKSPACE/android-arm64-proof/adb-timeout-patch.txt"
+          if grep -Eq 'timeout [0-9]+ adbx ' scripts/40-bringup.sh; then
+            echo 'Invalid ADB timeout invocation remains'; exit 1
+          fi
           echo 'Using pinned third-party boot patches only inside experimental isolated Android guest'
       - name: Download Android Google ARM64 SDK and validate emulator pinned checksum
         shell: bash
