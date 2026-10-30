@@ -100,6 +100,14 @@ def launch(args):
         if args.output is not None:
             cmd.extend(["--output", str(args.output.resolve())])
         return subprocess.call(cmd)
+    if args.operation == "session":
+        if p.get("os") != "windows":
+            raise ValueError("Session snapshot operations are only implemented for Tiny11")
+        helper = script_path(p, folder, "session_script")
+        target = (args.target or default_target(args.profile)).resolve()
+        return subprocess.call([sys.executable, str(helper), args.action,
+                                "--vm-dir", str(target),
+                                "--snapshot-dir", str(args.snapshot_dir.resolve())])
     if args.operation == "console":
         if p.get("os") != "windows":
             raise ValueError("Console GUI commands are supported only for Windows profiles")
@@ -140,6 +148,11 @@ def main():
     run.add_argument("--log", type=Path)
     run.add_argument("--output", type=Path)
     run.add_argument("--timeout", type=int, default=240)
+    session = sub.add_parser("session", help="Save/restore a STOPPED Tiny11 writable overlay and UEFI state")
+    session.add_argument("profile")
+    session.add_argument("action", choices=("save", "restore"))
+    session.add_argument("--target", type=Path)
+    session.add_argument("--snapshot-dir", type=Path, required=True)
     console = sub.add_parser("console", help="Control an offline Tiny11 QEMU GUI session")
     console.add_argument("profile")
     console.add_argument("--target", type=Path)
