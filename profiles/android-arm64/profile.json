@@ -1,0 +1,32 @@
+{
+  "id": "android-arm64",
+  "name": "Android ARM64 (AOSP/Google APIs, emulator ranchu TCG)",
+  "architecture": "aarch64",
+  "host_architecture": "x86_64",
+  "os": "android",
+  "version": "9 (API 28) - first boot baseline",
+  "abi": "arm64-v8a",
+  "status": "experimental",
+  "driver": "google-emulator-qemu-aarch64-tcg",
+  "runtime": [],
+  "guest_network": "isolated-pending-test",
+  "acceleration": "tcg",
+  "minimum_guest_ram_mib": 4096,
+  "bootstrap_script": "scripts/bootstrap.sh",
+  "run_script": "scripts/run-vm.sh",
+  "verify_script": "scripts/verify.py",
+  "upstream": {
+    "repository": "lhns/android-arm-tcg",
+    "commit": "f9eecf6c0d2fcc1e255b5a6d7322b07cbe017ba9",
+    "license": "MIT",
+    "sdk_vendor": "Google",
+    "emulator_build": "16489710",
+    "android_sdk": "system-images;android-28;google_apis;arm64-v8a"
+  },
+  "test_expectation": {
+    "adb_property": "ro.product.cpu.abi=arm64-v8a",
+    "android_ready": "service check package -> found"
+  },
+  "risk": "Experimental only. Upstream toolkit patches Android/emulator binaries, disables some HALs and SELinux enforcement; do not use with sensitive user accounts or secrets.",
+  "description": "Not an Android-x86 image, not upstream QEMU virt GSI, and no successful local boot is claimed yet."
+}
