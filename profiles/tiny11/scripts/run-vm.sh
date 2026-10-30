@@ -48,8 +48,19 @@ if [ -e "$PID_FILE" ]; then
   fi
   rm -f "$PID_FILE"
 fi
-nohup python3 "$HERE/dual-run.py" start --vm-dir "$BUNDLE" --headless --skip-hash >"$LOG" 2>&1 </dev/null &
-pid=$!
+# A child of a temporary chat shell may be killed when that shell's
+# process group is reaped. Start a completely detached OS session instead.
+pid="$(python3 - "$HERE/dual-run.py" "$BUNDLE" "$LOG" <<'PY'
+import subprocess,sys
+script,bundle,log=sys.argv[1:]
+with open(log,'ab',buffering=0) as output:
+    child=subprocess.Popen([sys.executable,script,'start','--vm-dir',bundle,
+                            '--headless','--skip-hash'],
+                           stdin=subprocess.DEVNULL,stdout=output,
+                           stderr=subprocess.STDOUT,start_new_session=True)
+print(child.pid)
+PY
+)"
 printf '%s\n' "$pid" >"$PID_FILE"
 for i in $(seq 1 30); do
   if [ -S "$BUNDLE/qemu-monitor.sock" ]; then
