@@ -149,11 +149,15 @@ jobs:
                 echo "UNSTABLE_INITIAL_PACKAGE_MANAGER" > "$2/READY_RESULT.txt"
               fi
               "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.build.version.release | tee "$2/android-version.txt"
+              # Even if PackageManager flaps, collect the GUI and ART crash
+              # evidence before stopping QEMU. A failing stability gate must
+              # NEVER generate PASS_REAL_ANDROID_ARM64_TCG_BOOT.
+              set +e
               python3 "$GITHUB_WORKSPACE/profiles/android-arm64/scripts/verify-stable-ready.py" --sdk-root "$SDK_ROOT" --proof-dir "$2" --checks 5 --interval 20
-              echo "PASS_REAL_ANDROID_ARM64_TCG_BOOT" | tee "$2/RESULT.txt"
-              # systemReady != Launcher. Try waking the actual HOME activity,
-              # capture two PNGs, and decode pixels to detect a black surface.
-              python3 "$GITHUB_WORKSPACE/profiles/android-arm64/scripts/inspect-gui.py" --sdk-root "$SDK_ROOT" --proof-dir "$2"
+              stability_rc=$?
+              set -e
+              echo "$stability_rc" > "$2/STABILITY_EXIT_CODE.txt"
+              timeout 300 python3 "$GITHUB_WORKSPACE/profiles/android-arm64/scripts/inspect-gui.py" --sdk-root "$SDK_ROOT" --proof-dir "$2" || echo 'GUI_DIAG_FAILED' > "$2/GUI_DIAG_ERROR.txt"
               # Never package a writable guest QCOW2 while QEMU is active.
               # Request Android sync+shutdown first, then stop QEMU before exit.
               timeout 60 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell sync || true
@@ -177,6 +181,11 @@ jobs:
                   fi
                 fi
               fi
+              if [ "$stability_rc" -ne 0 ]; then
+                echo "Android ARM64 system_server is unstable; preserving diagnostics without an image archive"
+                exit "$stability_rc"
+              fi
+              echo "PASS_REAL_ANDROID_ARM64_TCG_BOOT" | tee "$2/RESULT.txt"
             ' _ "$RUNNER_TEMP/android-arm-tcg" "$GITHUB_WORKSPACE/android-arm64-proof"
       - name: Package privately verified Android ARM64 VM kit (only after actual ADB readiness)
         if: success()
