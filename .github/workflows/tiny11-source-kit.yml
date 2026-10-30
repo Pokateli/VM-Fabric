@@ -1,0 +1,35 @@
+name: VM-Fabric Tiny11 portable source kit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tiny11-source-kit.yml'
+      - 'profiles/tiny11/**'
+      - 'vmfabric.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  kit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify all Tiny11 Python and Bash profile entrypoints
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m compileall -q vmfabric.py profiles/tiny11/scripts
+          for file in profiles/tiny11/scripts/*.sh; do bash -n "$file"; done
+          python3 vmfabric.py info tiny11
+          python3 -m unittest discover -s tests -v
+      - name: Package source-only runner for chat bootstrap
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-fabric-tiny11-source-kit
+          path: |
+            vmfabric.py
+            profiles/tiny11/
+            README.md
+          retention-days: 90
+          if-no-files-found: error
