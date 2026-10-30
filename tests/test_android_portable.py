@@ -27,6 +27,7 @@ PARTS=(
  "proof/android-properties.txt",
  "proof/package-service.txt",
  "proof/STABILITY_RESULT.txt",
+ "proof/GUI_RESULT.txt",
  "proof/stability-report.json",
 )
 PROPS="AndroidVersion.ApiLevel=28\nSystemImage.Abi=arm64-v8a\nSystemImage.TagId=google_apis\n"
@@ -48,6 +49,7 @@ class AndroidPortableKitTests(unittest.TestCase):
             if name.endswith("proof/android-properties.txt"):payload=b"ANDROID_ABI=arm64-v8a\n"
             if name.endswith("proof/package-service.txt"):payload=b"Service package: found\n"
             if name.endswith("proof/STABILITY_RESULT.txt"):payload=b"PASS_STABLE_ANDROID_ARM64_PACKAGE_SERVICE\n"
+            if name.endswith("proof/GUI_RESULT.txt"):payload=b"LAUNCHER_HOME_EVIDENCE\n"
             if name.endswith("proof/stability-report.json"):
                 obs=[{"passed":True,"abi":{"stdout":"arm64-v8a"},
                       "same_server":True,"system_server_pid":{"stdout":"1777"},
@@ -130,6 +132,12 @@ class AndroidPortableKitTests(unittest.TestCase):
         x=self.call("pack",self.src,self.chunks)
         self.assertNotEqual(x.returncode,0)
         self.assertIn("five real stable",x.stderr)
+
+    def test_refuses_nonlauncher_gui_even_when_package_stable(self):
+        (self.src/"proof/GUI_RESULT.txt").write_text("VISIBLE_FRAMEBUFFER_NOT_PROVEN_LAUNCHER\n")
+        p=self.call("pack",self.src,self.chunks)
+        self.assertNotEqual(p.returncode,0)
+        self.assertIn("working Launcher3 UI",p.stderr)
 
     def test_refuses_wrong_abi(self):
         p=self.src/"sdk/system-images/android-28/google_apis/arm64-v8a/source.properties"
