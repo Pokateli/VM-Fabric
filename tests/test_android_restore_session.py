@@ -23,6 +23,8 @@ class RestoreSessionTests(unittest.TestCase):
         paths={
           "build/userdata-arm64.qcow2":b"FAKE_BASE_DISK",
           "build/ramdisk-wrap.img":b"FAKE_RAMDISK",
+          "build/dex/stub.dex":b"FAKE_DEX_STUB",
+          "build/dex/wdctl.dex":b"FAKE_DEX_WATCHDOG",
           "sdk/emulator/qemu/linux-x86_64/qemu-system-aarch64-headless":b"FAKE_EMULATOR",
           "sdk/system-images/android-28/google_apis/arm64-v8a/source.properties":b"AndroidVersion.ApiLevel=28\nSystemImage.Abi=arm64-v8a\n",
           "proof/STABILITY_RESULT.txt":b"PASS_STABLE_ANDROID_ARM64_PACKAGE_SERVICE\n",
@@ -44,6 +46,8 @@ class RestoreSessionTests(unittest.TestCase):
         self.assertEqual((self.root/"build/userdata-arm64.qcow2").read_bytes(),b"FAKE_BASE_DISK")
         self.assertEqual((dest/"build/userdata-arm64.qcow2").read_bytes(),b"FAKE_OVERLAY")
         self.assertTrue((dest/"build/ramdisk-wrap.img").is_symlink())
+        self.assertTrue((dest/"build/dex").is_symlink())
+        self.assertEqual((dest/"build/dex/wdctl.dex").read_bytes(),b"FAKE_DEX_WATCHDOG")
         manifest=json.loads((dest/"session.json").read_text())
         self.assertTrue(manifest["base_immutable"])
         self.assertEqual(manifest["guest_abi"],"arm64-v8a")
