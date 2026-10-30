@@ -1,3 +1,26 @@
+## 2026-10-30 — system_server instability, exact stable-ready gate
+
+The actual post-GUI test [#41122478374](https://github.com/Pokateli/VM-Fabric/actions/runs/41122478374) again reached `systemReady`, but the Android PackageManager service was **flapping**:
+- 20:25:56 `READY: package service up`.
+- 20:26:33 `Service package: not found`, directly after `ANDROID_ABI=arm64-v8a`.
+- 20:27:02 boot monitor later observed `Service package: found`.
+- 20:27:49 `ANDROID_GUI_STATUS=BLACK_FRAMEBUFFER`. Both 320x480 PNG captures had zero visible pixels. ADB `window` and `package` service commands also returned unavailable during GUI inspection.
+- 20:28:37 the monitor reported ADB unavailable; stop/reboot of the test guest followed.
+
+The prior workflow mistakenly used `grep -qi found` on `Service package: not found`, which falsely reported readiness, though subsequent pack step had a stricter exact check and refused publication. **The transport/publisher safely rejected the unstable image.**
+
+Repaired pipeline:
+- `verify-stable-ready.py`: five consecutive real ADB checks across >=80 seconds, all reporting `device`, `arm64-v8a`, `zygote=running`, and **exactly** `Service package: found`. It also requires the **same numeric system_server PID** across all five samples to detect rapid service restarts. Results: `STABILITY_RESULT.txt` and `stability-report.json`.
+- Private portable-kit archive rejects missing, forged, transient or changed-PID stability samples; one transient `found` is no longer sufficient.
+- Added synthetic regression coverage for `not found`, changing PIDs and stricter archive validation; 35/35 passed in [#41124939308](https://github.com/Pokateli/VM-Fabric/actions/runs/41124939308).
+- A failed GitHub run [#41124688333](https://github.com/Pokateli/VM-Fabric/actions/runs/41124688333) was traced to a **single quote in a comment** inside the workflow's `bash -c '...'` nested network-namespace block. The shell tried `cd _` instead of launching QEMU. Fixed in commit `32eb342d`, with `tests/test_android_workflow.py` checking the nested script contains no unescaped apostrophes and passes `bash -n`.
+- [Full TCG run #41125122042](https://github.com/Pokateli/VM-Fabric/actions/runs/41125122042) was downloading the pinned ARM64 SDK at last inspection.
+- Experimental `patch-art-experiment.py` supports a **disabled-by-default** no-JIT switch before pinned zygote restart for a later controlled ART fault experiment. It has not been applied to production or baseline image, and it does not claim to repair `libart.so` SIGSEGV.
+
+**Status remains experimental**. There is proven intermittent Android ARM64 `systemReady`, **not** stable PackageManager, working Launcher, or distributable portable image. The test image must remain isolated and avoid personal credentials.
+
+---
+
 ## 2026-10-30 — CONFIRMED Android ARM64 systemReady on real TCG; GUI next
 
 ### Android Framework / graphics analysis from actual guest logs
