@@ -1,3 +1,17 @@
+## 2026-10-30 — Live ARM64 ART / HWUI experiment pipeline
+
+The real [TCG run #41125122042](https://github.com/Pokateli/VM-Fabric/actions/runs/41125122042) produced hard evidence of `system_server` restarting from **PID 1613** to **2405**. The third of five stability samples also reported exactly `Service package: not found`. The process later registered the service again, but this was correctly rejected (exit 87), not marked stable.
+
+After investigating the ARM64 tombstones, isolated three separate build variants:
+- **Baseline** [#41126916549](https://github.com/Pokateli/VM-Fabric/actions/runs/41126916549) — unchanged ART/HWUI settings.
+- **ART no JIT** [#41126922138](https://github.com/Pokateli/VM-Fabric/actions/runs/41126922138) — isolated `android-arm64-nojit-lab-20261030` branch, opt-in guest `dalvik.vm.usejit=false` before zygote restart.
+- **Legacy HWUI OpenGL** [#41127069219](https://github.com/Pokateli/VM-Fabric/actions/runs/41127069219) — isolated `android-arm64-legacy-hwui-lab-20261030` branch, opt-in `debug.hwui.renderer=opengl` to distinguish SkiaGL renderer crashes.
+
+Baseline and no-JIT reached the boot step, and the HWUI test was downloading the Google ARM64 SDK at last check. Their **outcomes are pending**; do not declare any treatment successful without actual ADB stable PID and graphical proof.
+
+A shell single-quote in the GUI diagnostic fallback stopped the first CI preflights, then was fixed in both baseline and no-JIT branches. [#41127331951](https://github.com/Pokateli/VM-Fabric/actions/runs/41127331951) passed **43/43** quick tests, including exact shell syntax checks and `compare-proofs.py` regression tests. That comparator reports actual ADB stability, PID changes, libart/libhwui SIGSEGV blocks and GUI results from downloaded proof ZIP artifacts. Existing Debian13/Tiny11 profiles remain intact.
+
+---
 ## Android ARM64 — controlled ART vs renderer experiments (2026-10-30)
 
 **Confirmed instability:** real GitHub boot [#41125122042](https://github.com/Pokateli/VM-Fabric/actions/runs/41125122042) recorded five ADB observations. Two were stable with `system_server` PID **1613**, then `Service package: not found` and `system_server` PID **2405** appeared. Later samples returned `found` with PID 2405, but the process had restarted, so the 5-sample stability gate correctly rejected the image (exit code 87).
