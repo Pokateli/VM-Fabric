@@ -81,6 +81,31 @@ class AndroidPortableKitTests(unittest.TestCase):
             self.assertEqual((dest/name).read_bytes(),(self.src/name).read_bytes())
         self.assertFalse((dest/"sdk/dl/stale.zip").exists())
 
+    def test_multishard_stream_roundtrip_and_sha256(self):
+        # Force tiny shards to exercise the exact same streaming code path
+        # as the real ~1.49 GB kit without allocating gigabytes in CI.
+        import importlib.util
+        spec=importlib.util.spec_from_file_location("android_stream_packer",PACK)
+        module=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.CHUNK=128
+        module.pack(self.src,self.chunks)
+        manifest=json.loads((self.chunks/"android-arm64-parts.json").read_text())
+        self.assertGreater(len(manifest["parts"]),3)
+        out=self.home/"restore"
+        module.unpack(self.chunks,out)
+        self.assertEqual((out/"build/userdata-arm64.qcow2").read_bytes(),
+                         (self.src/"build/userdata-arm64.qcow2").read_bytes())
+        # Tampering with the *last* shard must also be rejected.
+        part=self.chunks/manifest["parts"][-1]["name"]
+        with part.open("r+b") as handle:
+            handle.seek(-1,2)
+            old=handle.read(1)  # likely EOF; seek one byte back explicitly
+            handle.seek(-1,2)
+            handle.write(bytes([0 if not old else (old[0]^255)]))
+        with self.assertRaises((ValueError,Exception)):
+            module.unpack(self.chunks,self.home/"tampered")
+
     def test_emulator_runtime_file_is_not_bundled(self):
         # In the real Github TCG guest boot the emulator wrote a root-owned
         # bootcompleted.ini; tar attempted to read it and failed with EACCES.
