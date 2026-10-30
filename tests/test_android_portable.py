@@ -98,11 +98,20 @@ class AndroidPortableKitTests(unittest.TestCase):
         self.assertNotEqual(x.returncode,0)
         self.assertIn("Refuse to pack Android",x.stderr)
 
-    def test_refuses_forged_marker_without_real_adb_evidence(self):
+    def test_initial_transient_not_found_allowed_only_with_stable_service_proof(self):
+        # Actual legacy-HWUI TCG boot: initial probe saw "not found" but
+        # all five later observations were stable with unchanged PID.
         (self.src/"proof/package-service.txt").write_text("Service package: not found\n")
         x=self.call("pack",self.src,self.chunks)
+        self.assertEqual(x.returncode,0,x.stderr)
+        y=self.call("unpack",self.chunks,self.home/"restore")
+        self.assertEqual(y.returncode,0,y.stderr)
+
+    def test_refuses_forged_initial_probe_text(self):
+        (self.src/"proof/package-service.txt").write_text("Service package: spoofed\n")
+        x=self.call("pack",self.src,self.chunks)
         self.assertNotEqual(x.returncode,0)
-        self.assertIn("package-service evidence",x.stderr)
+        self.assertIn("initial probe evidence",x.stderr)
 
     def test_refuses_transient_package_service(self):
         stable=self.src/"proof/stability-report.json"
