@@ -50,8 +50,11 @@ class AndroidPortableKitTests(unittest.TestCase):
             if name.endswith("proof/STABILITY_RESULT.txt"):payload=b"PASS_STABLE_ANDROID_ARM64_PACKAGE_SERVICE\n"
             if name.endswith("proof/stability-report.json"):
                 obs=[{"passed":True,"abi":{"stdout":"arm64-v8a"},
+                      "same_server":True,"system_server_pid":{"stdout":"1777"},
                       "package":{"stdout":"Service package: found"}} for i in range(5)]
-                payload=json.dumps({"stable":True,"sample_count":5,
+                payload=json.dumps({"schema":2,"stable":True,
+                                    "first_system_server_pid":"1777",
+                                    "sample_count":5,
                                     "interval_seconds":20,"observations":obs}).encode()
             target.write_bytes(payload)
         # Root model contains a private SDK cache which must not be transported.
@@ -105,6 +108,15 @@ class AndroidPortableKitTests(unittest.TestCase):
         stable=self.src/"proof/stability-report.json"
         doc=json.loads(stable.read_text())
         doc["observations"][2]["package"]["stdout"]="Service package: not found"
+        stable.write_text(json.dumps(doc))
+        x=self.call("pack",self.src,self.chunks)
+        self.assertNotEqual(x.returncode,0)
+        self.assertIn("five real stable",x.stderr)
+
+    def test_refuses_switching_system_server_pids(self):
+        stable=self.src/"proof/stability-report.json"
+        doc=json.loads(stable.read_text())
+        doc["observations"][3]["system_server_pid"]["stdout"]="1888"
         stable.write_text(json.dumps(doc))
         x=self.call("pack",self.src,self.chunks)
         self.assertNotEqual(x.returncode,0)
