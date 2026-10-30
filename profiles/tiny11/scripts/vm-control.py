@@ -17,7 +17,10 @@ def talk(address: Path, command: str) -> str:
         raise SystemExit(f"QEMU monitor not found: {address}")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
         conn.settimeout(6)
-        conn.connect(str(address))
+        try:
+            conn.connect(str(address))
+        except (ConnectionRefusedError, FileNotFoundError, socket.timeout) as exc:
+            raise SystemExit(f"QEMU session not active; stale/unavailable monitor: {address} ({exc})")
         _ = conn.recv(8192)
         conn.sendall((command + "\n").encode("ascii"))
         end = time.monotonic() + 5
