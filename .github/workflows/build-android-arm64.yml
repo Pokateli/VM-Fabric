@@ -143,7 +143,7 @@ jobs:
               echo "ANDROID_ABI=$abi" | tee "$2/android-properties.txt"
               test "$abi" = arm64-v8a
               "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell service check package | tee "$2/package-service.txt"
-              # 'not found' must NEVER be accepted (the old grep -qi found was
+              # Unavailable PackageManager must NEVER be treated as ready
               # a false positive). Keep a real, multi-sample stability record.
               if ! grep -Eq "^Service package: found[[:space:]]*$" "$2/package-service.txt"; then
                 echo "UNSTABLE_INITIAL_PACKAGE_MANAGER" > "$2/READY_RESULT.txt"
