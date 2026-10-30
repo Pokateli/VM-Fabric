@@ -28,5 +28,6 @@
     "android_ready": "service check package -> found"
   },
   "risk": "Experimental only. Upstream toolkit patches Android/emulator binaries, disables some HALs and SELinux enforcement; do not use with sensitive user accounts or secrets.",
-  "description": "Not an Android-x86 image, not upstream QEMU virt GSI, and no successful local boot is claimed yet."
+  "description": "Not an Android-x86 image, not upstream QEMU virt GSI, and no successful local boot is claimed yet.",
+  "console_script": "scripts/console.py"
 }
