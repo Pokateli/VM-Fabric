@@ -68,6 +68,19 @@ class AndroidPortableKitTests(unittest.TestCase):
             self.assertEqual((dest/name).read_bytes(),(self.src/name).read_bytes())
         self.assertFalse((dest/"sdk/dl/stale.zip").exists())
 
+    def test_emulator_runtime_file_is_not_bundled(self):
+        # In the real Github TCG guest boot the emulator wrote a root-owned
+        # bootcompleted.ini; tar attempted to read it and failed with EACCES.
+        p=self.src/"sdk/system-images/android-28/google_apis/arm64-v8a/bootcompleted.ini"
+        p.write_text("transient: do not archive")
+        p.chmod(0)
+        x=self.call("pack",self.src,self.chunks)
+        self.assertEqual(x.returncode,0,x.stderr)
+        restored=self.home/"restore"
+        y=self.call("unpack",self.chunks,restored)
+        self.assertEqual(y.returncode,0,y.stderr)
+        self.assertFalse((restored/"sdk/system-images/android-28/google_apis/arm64-v8a/bootcompleted.ini").exists())
+
     def test_refuses_synthetic_unverified_boot_proof(self):
         (self.src/"proof/RESULT.txt").write_text("BOOT_STARTED_BUT_NO_PACKAGE_SERVICE\n")
         x=self.call("pack",self.src,self.chunks)
