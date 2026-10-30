@@ -43,10 +43,15 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
             git curl unzip e2fsprogs qemu-utils file xxd cpio perl python3 \
-            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu openjdk-21-jdk-headless \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross openjdk-21-jdk-headless \
             iproute2 util-linux libx11-6 libxext6 libxfixes3 libxdamage1 libxshmfence1 \
             libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libegl1 libgles2 libgbm1 \
             libdrm2 libglvnd0 libopengl0
+          # Catch a missing ARM64 glibc sysroot before multi-GB SDK download.
+          printf '#include <unistd.h>\nint main(void){return 0;}\n' > /tmp/android-arm64-gcc-check.c
+          aarch64-linux-gnu-gcc -static /tmp/android-arm64-gcc-check.c -o /tmp/android-arm64-gcc-check
+          file /tmp/android-arm64-gcc-check
+          file /tmp/android-arm64-gcc-check | grep -q 'ARM aarch64'
           df -h .
       - name: Download exactly pinned and auditable MIT Android-ARM-TCG toolkit
         shell: bash
