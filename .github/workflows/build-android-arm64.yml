@@ -160,7 +160,7 @@ jobs:
               stability_rc=$?
               set -e
               echo "$stability_rc" > "$2/STABILITY_EXIT_CODE.txt"
-              timeout 300 python3 "$GITHUB_WORKSPACE/profiles/android-arm64/scripts/inspect-gui.py" --sdk-root "$SDK_ROOT" --proof-dir "$2" || echo 'GUI_DIAG_FAILED' > "$2/GUI_DIAG_ERROR.txt"
+              timeout 300 python3 "$GITHUB_WORKSPACE/profiles/android-arm64/scripts/inspect-gui.py" --sdk-root "$SDK_ROOT" --proof-dir "$2" || echo GUI_DIAG_FAILED > "$2/GUI_DIAG_ERROR.txt"
               # Never package a writable guest QCOW2 while QEMU is active.
               # Request Android sync+shutdown first, then stop QEMU before exit.
               timeout 60 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell sync || true
