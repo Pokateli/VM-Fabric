@@ -113,7 +113,7 @@ jobs:
           export BUILD_DIR="$RUNNER_TEMP/android-arm-build"
           # Run emulator AND adb inside an isolated network namespace. The
           # namespace has localhost for ADB but no host uplink or routes.
-          sudo --preserve-env=SDK_ROOT,BUILD_DIR,ANDROID_I_WANT_MY_TCG,MEM,CORES \
+          sudo --preserve-env=GITHUB_WORKSPACE,SDK_ROOT,BUILD_DIR,ANDROID_I_WANT_MY_TCG,MEM,CORES \
             unshare --net -- bash -Eeuo pipefail -c '
               ip link set lo up
               cd "$1"
@@ -132,6 +132,9 @@ jobs:
               grep -qi found "$2/package-service.txt"
               "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.build.version.release | tee "$2/android-version.txt"
               echo "PASS_REAL_ANDROID_ARM64_TCG_BOOT" | tee "$2/RESULT.txt"
+              # Upstream bring-up turns off the LCD to save TCG CPU. Wake it
+              # only after the package service is alive, before framebuffer capture.
+              timeout 60 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell input keyevent 224 || true
               # Graphical success is a SEPARATE gate from Android systemReady.
               # Do not fail the kernel/ADB proof just because SurfaceFlinger or
               # Launcher has not yet completed software rendering.
