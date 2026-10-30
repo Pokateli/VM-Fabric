@@ -20,8 +20,8 @@ def read(z,name):
     except (KeyError,OSError):return ""
 
 def summary(path):
-    with zipfile.ZipFile(path) as zip:
-        raw=read(zip,"stability-report.json")
+    with zipfile.ZipFile(path) as archive:
+        raw=read(archive,"stability-report.json")
         try:stable=json.loads(raw) if raw else {}
         except json.JSONDecodeError:stable={}
         samples=stable.get("observations",[])
@@ -29,7 +29,7 @@ def summary(path):
         stable_samples=sum(1 for x in samples if x.get("passed") is True)
         pids=[x.get("system_server_pid",{}).get("stdout","") for x in samples]
         pid_changes=sum(1 for a,b in zip(pids,pids[1:]) if a and b and a!=b)
-        logs=read(zip,"emulator-tail.log")
+        logs=read(archive,"emulator-tail.log")
         crashes=[]
         lines=logs.splitlines()
         # Each Android tombstone starts with 'DEBUG: pid:' (a process header).
@@ -44,11 +44,11 @@ def summary(path):
             crashes.append({"process":re.search(r">>>\s*(.*?)\s*<<<",line).group(1)
                             if ">>>" in line and re.search(r">>>\s*(.*?)\s*<<<",line)
                             else "unknown","kind":source})
-        proof=read(zip,"RESULT.txt")
-        status=read(zip,"STABILITY_RESULT.txt").strip()
-        gui=read(zip,"GUI_RESULT.txt").strip()
+        proof=read(archive,"RESULT.txt")
+        status=read(archive,"STABILITY_RESULT.txt").strip()
+        gui=read(archive,"GUI_RESULT.txt").strip()
         return {"boot_marked":"PASS_REAL_ANDROID_ARM64_TCG_BOOT" in proof.splitlines(),
-                "arm64":"ANDROID_ABI=arm64-v8a" in read(zip,"android-properties.txt").splitlines(),
+                "arm64":"ANDROID_ABI=arm64-v8a" in read(archive,"android-properties.txt").splitlines(),
                 "stable":(status=="PASS_STABLE_ANDROID_ARM64_PACKAGE_SERVICE"
                           and len(samples)>=5 and stable_samples==len(samples)
                           and len(set(pids))==1 and all(pids)),
