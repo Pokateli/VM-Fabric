@@ -1,3 +1,23 @@
+## Android ARM64 — controlled ART vs renderer experiments (2026-10-30)
+
+**Confirmed instability:** real GitHub boot [#41125122042](https://github.com/Pokateli/VM-Fabric/actions/runs/41125122042) recorded five ADB observations. Two were stable with `system_server` PID **1613**, then `Service package: not found` and `system_server` PID **2405** appeared. Later samples returned `found` with PID 2405, but the process had restarted, so the 5-sample stability gate correctly rejected the image (exit code 87).
+
+The attached real `emulator-tail.log` records `system_server` SIGSEGV in `libart.so` `art::RememberForGcArgumentVisitor::Visit` / quick resolution trampoline, and app `RenderThread` SIGSEGV in `libhwui.so` SkiaGL `GrGLProgramBuilder::CreateProgram` / `GrShaderVar::appendDecl`.
+
+**Pipeline corrections:** on failed stability samples, collect bounded `inspect-gui.py` and ART crash logs, shut down QEMU, and mark run as failed without publishing a private image. One GitHub preflight uncovered another single quote in nested `bash -c` error message (the `GUI_DIAG_FAILED` fallback), corrected in both the baseline and no-JIT experiment branches; regressions now check nested-shell quote safety.
+
+**Independent experiments, without modifying the baseline configuration:**
+
+| Experiment | GitHub run | What changes | Success gate |
+| --- | --- | --- | --- |
+| baseline | [#41126916549](https://github.com/Pokateli/VM-Fabric/actions/runs/41126916549) | no new ART/HWUI settings | 5 stable ADB samples, same `system_server` PID |
+| `nojit` | [#41126922138](https://github.com/Pokateli/VM-Fabric/actions/runs/41126922138) | opt-in guest `dalvik.vm.usejit=false` before zygote restart | same as baseline, inspect whether ART crashes persist |
+| `legacy-opengl` | [#41127069219](https://github.com/Pokateli/VM-Fabric/actions/runs/41127069219) | opt-in guest `debug.hwui.renderer=opengl` before zygote restart | same stability gate plus a genuinely visible Android framebuffer |
+
+The last two are on isolated branches `android-arm64-nojit-lab-20261030` and `android-arm64-legacy-hwui-lab-20261030`. They use the exact same official Google Android API-28 `arm64-v8a` SDK image and pinned TCG emulator. Neither experiment is validated or promoted. No user credentials or Internet access are provided to this isolated experimental guest.
+
+---
+
 ## 2026-10-30 — system_server instability, exact stable-ready gate
 
 The actual post-GUI test [#41122478374](https://github.com/Pokateli/VM-Fabric/actions/runs/41122478374) again reached `systemReady`, but the Android PackageManager service was **flapping**:
