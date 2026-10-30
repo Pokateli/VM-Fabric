@@ -109,8 +109,22 @@ def launch(args):
                                 "--vm-dir", str(target),
                                 "--snapshot-dir", str(args.snapshot_dir.resolve())])
     if args.operation == "console":
+        if p.get("os") == "android":
+            if args.action not in ("status", "screenshot", "sendkey", "powerdown", "click"):
+                raise ValueError("Android ADB console supports status/screenshot/sendkey/click/powerdown only")
+            helper = script_path(p, folder, "console_script")
+            target = (args.target or default_target(args.profile)).resolve()
+            action = "tap" if args.action == "click" else args.action
+            cmd = [sys.executable, str(helper), action, "--bundle", str(target)]
+            if args.output is not None:
+                cmd.extend(["--output", str(args.output.resolve())])
+            if args.keys is not None:
+                cmd.extend(["--keys", args.keys])
+            if action == "tap":
+                cmd.extend(["--dx", str(args.dx), "--dy", str(args.dy)])
+            return subprocess.call(cmd)
         if p.get("os") != "windows":
-            raise ValueError("Console GUI commands are supported only for Windows profiles")
+            raise ValueError("Console not supported for this VM profile")
         helper = script_path(p, folder, "console_script")
         target = (args.target or default_target(args.profile)).resolve()
         cmd = [sys.executable, str(helper), args.action, "--vm-dir", str(target)]
