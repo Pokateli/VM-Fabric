@@ -23,6 +23,11 @@ jobs:
           for file in profiles/tiny11/scripts/*.sh; do bash -n "$file"; done
           python3 vmfabric.py info tiny11
           python3 -m unittest discover -s tests -v
+      - name: Remove generated Python bytecode from portable source kit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          find profiles/tiny11 -type d -name __pycache__ -prune -exec rm -rf {} +
       - name: Package source-only runner for chat bootstrap
         uses: actions/upload-artifact@v4
         with:
