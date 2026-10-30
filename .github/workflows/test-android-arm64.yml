@@ -10,6 +10,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: android-arm64-fast-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   static-tests:
     runs-on: ubuntu-24.04
