@@ -1,3 +1,22 @@
+## 2026-10-30 — Private kit restored and really booted on second GitHub runner; late ART crash
+
+The private 1.49 GB Android ARM64 kit from successful run [#41129772918](https://github.com/Pokateli/VM-Fabric/actions/runs/41129772918) **restored successfully** in an independent clean-room runner [#41132811947](https://github.com/Pokateli/VM-Fabric/actions/runs/41132811947). Verified all streamed shard SHA256 hashes and key component checksums, `SystemImage.Abi=arm64-v8a`, pinned emulator/ramdisk, and base QCOW2 integrity; created a clean writable 6-GiB virtual-size overlay. Android booted again with ADB `device`, `ro.product.cpu.abi=arm64-v8a`, `sys.boot_completed=1`, SurfaceFlinger and PackageManager.
+
+**The second boot failed the strict stability gate**, not archive restoration: 4/5 checks passed with `system_server` PID **1630**, but PID changed to **2538** in the fifth while `Service package: found` remained registered. Attached proof artifact [#13014366989](https://github.com/Pokateli/VM-Fabric/actions/runs/41132811947/artifacts/13014366989). Exact ARM64 SIGSEGV at ~237s uptime:
+```text
+art::RememberForGcArgumentVisitor::Visit
+art::QuickArgumentVisitor::VisitArguments
+artQuickResolutionTrampoline
+ShortcutParser.createShortcutFromManifest
+ShortcutService.rescanUpdatedPackagesLocked
+ShortcutService.checkPackageChanges
+```
+Therefore **repeat boot is demonstrated**, but **repeat-boot stability and GUI readiness are not yet proved** and VM-Fabric Android remains experimental. No private image released publicly. Code now also checks the immutable base QCOW2 SHA256 after a second boot, and fails early on QEMU process death.
+
+A separate diagnostic branch [`android-arm64-shortcut-safemode-lab-20261030`](https://github.com/Pokateli/VM-Fabric/tree/android-arm64-shortcut-safemode-lab-20261030) tests whether Android's built-in Safe Mode bypass of `ShortcutService.checkPackageChanges` removes the ART crash. It modifies only a throwaway session-specific source copy, never the saved SDK/data base. [Safe Mode run #41134334742](https://github.com/Pokateli/VM-Fabric/actions/runs/41134334742) was restoring the source artifact at last check. If it helps, a much narrower method-specific workaround must replace Safe Mode before general use.
+
+---
+
 ## 2026-10-30 — FIRST SUCCESSFUL PRIVATE ANDROID ARM64 KIT
 
 **Confirmed GitHub Actions [#41129772918](https://github.com/Pokateli/VM-Fabric/actions/runs/41129772918) concluded success in BOTH jobs.** The private artifact `vm-fabric-android-arm64-private-kit` ID **13012994299** was uploaded, size **1,490,154,912 bytes** (about 1.49 GB decimal). This is not merely a proof log: it contains the streamed compressed Android SDK/system images, pinned emulator, ramdisk, source scripts, precompiled helper DEX files and cleanly shut-down `userdata-arm64.qcow2`. A separate evidence artifact `vm-fabric-android-arm64-tcg-proof` ID **13013193695** was uploaded. The published zip digest reported by GitHub Actions for the private kit artifact is `1e938d327b247750a483be9aadc36ff2e1e692bcb39ee024986716b02950bd32` (artifact transport zip checksum, not individual shard checksum).
