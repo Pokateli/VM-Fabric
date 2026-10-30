@@ -1,0 +1,134 @@
+name: Android ARM64 (API 28) first real TCG boot and ADB proof
+on:
+  push:
+    branches: [android-arm64-tcg-20261030]
+    paths:
+      - '.github/workflows/build-android-arm64.yml'
+      - 'profiles/android-arm64/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    name: Validate ARM64 image plan and VM-Fabric profile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate profile and Android TCG scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m compileall -q profiles/android-arm64/scripts
+          for f in profiles/android-arm64/scripts/*.sh; do bash -n "$f"; done
+          python3 vmfabric.py info android-arm64
+          python3 -m unittest discover -s tests -v
+  boot:
+    name: Run genuine arm64-v8a Android system image under QEMU TCG
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 170
+    env:
+      ANDROID_TOOLKIT_REV: f9eecf6c0d2fcc1e255b5a6d7322b07cbe017ba9
+      ANDROID_I_WANT_MY_TCG: 'yes'
+      MEM: '4096'
+      CORES: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reclaim free disk and install cross-architecture toolchain
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            git curl unzip e2fsprogs qemu-utils file xxd cpio perl python3 \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu openjdk-21-jdk-headless \
+            iproute2 util-linux libx11-6 libxext6 libxfixes3 libxdamage1 libxshmfence1 \
+            libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libegl1 libgles2 libgbm1 \
+            libdrm2 libglvnd0 libopengl0
+          df -h .
+      - name: Download exactly pinned and auditable MIT Android-ARM-TCG toolkit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git clone -q https://github.com/lhns/android-arm-tcg.git "$RUNNER_TEMP/android-arm-tcg"
+          cd "$RUNNER_TEMP/android-arm-tcg"
+          git checkout --detach "$ANDROID_TOOLKIT_REV"
+          test "$(git rev-parse HEAD)" = "$ANDROID_TOOLKIT_REV"
+          mkdir -p "$GITHUB_WORKSPACE/android-arm64-proof"
+          git rev-parse HEAD > "$GITHUB_WORKSPACE/android-arm64-proof/upstream-revision.txt"
+          echo 'Using pinned third-party boot patches only inside experimental isolated Android guest'
+      - name: Download Android Google ARM64 SDK and validate emulator pinned checksum
+        shell: bash
+        timeout-minutes: 60
+        run: |
+          set -Eeuo pipefail
+          cd "$RUNNER_TEMP/android-arm-tcg"
+          export SDK_ROOT="$RUNNER_TEMP/android-sdk-arm64"
+          export BUILD_DIR="$RUNNER_TEMP/android-arm-build"
+          timeout 3400 sh scripts/00-setup.sh 2>&1 | tee "$GITHUB_WORKSPACE/android-arm64-proof/download.log"
+          test -s "$SDK_ROOT/system-images/android-28/google_apis/arm64-v8a/system.img"
+          test -s "$SDK_ROOT/system-images/android-28/google_apis/arm64-v8a/kernel-ranchu"
+          grep -q '^Pkg.Path=system-images;android-28;google_apis;arm64-v8a' "$SDK_ROOT/system-images/android-28/google_apis/arm64-v8a/source.properties"
+          file "$SDK_ROOT/system-images/android-28/google_apis/arm64-v8a/kernel-ranchu" | tee "$GITHUB_WORKSPACE/android-arm64-proof/kernel-file.txt"
+          df -h .
+      - name: Prepare verified AOSP images and compile ARM64 init wrapper
+        shell: bash
+        timeout-minutes: 30
+        run: |
+          set -Eeuo pipefail
+          cd "$RUNNER_TEMP/android-arm-tcg"
+          export SDK_ROOT="$RUNNER_TEMP/android-sdk-arm64"
+          export BUILD_DIR="$RUNNER_TEMP/android-arm-build"
+          timeout 1600 sh scripts/10-patch-image.sh 2>&1 | tee "$GITHUB_WORKSPACE/android-arm64-proof/image-patches.log"
+          timeout 650 sh scripts/20-build-ramdisk.sh 2>&1 | tee "$GITHUB_WORKSPACE/android-arm64-proof/ramdisk.log"
+          file "$BUILD_DIR/init" | tee "$GITHUB_WORKSPACE/android-arm64-proof/init-file.txt"
+          file "$BUILD_DIR/ramdisk-wrap.img" | tee "$GITHUB_WORKSPACE/android-arm64-proof/ramdisk-file.txt"
+          grep -qi 'aarch64\|ARM aarch64' "$GITHUB_WORKSPACE/android-arm64-proof/init-file.txt"
+      - name: Boot Android ARM64 under pure TCG without guest Internet
+        shell: bash
+        timeout-minutes: 70
+        run: |
+          set -Eeuo pipefail
+          export SDK_ROOT="$RUNNER_TEMP/android-sdk-arm64"
+          export BUILD_DIR="$RUNNER_TEMP/android-arm-build"
+          # Run emulator AND adb inside an isolated network namespace. The
+          # namespace has localhost for ADB but no host uplink or routes.
+          sudo --preserve-env=SDK_ROOT,BUILD_DIR,ANDROID_I_WANT_MY_TCG,MEM,CORES \
+            unshare --net -- bash -Eeuo pipefail -c '
+              ip link set lo up
+              cd "$1"
+              echo "GUEST_NETWORK=isolated Linux netns (loopback only)"
+              timeout 70 sh scripts/30-launch.sh
+              timeout 3450 sh scripts/40-bringup.sh
+              abi=$("$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.product.cpu.abi | tr -d "\r")
+              echo "ANDROID_ABI=$abi" | tee "$2/android-properties.txt"
+              test "$abi" = arm64-v8a
+              "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell service check package | tee "$2/package-service.txt"
+              grep -qi found "$2/package-service.txt"
+              "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.build.version.release | tee "$2/android-version.txt"
+              echo "PASS_REAL_ANDROID_ARM64_TCG_BOOT" | tee "$2/RESULT.txt"
+            ' _ "$RUNNER_TEMP/android-arm-tcg" "$GITHUB_WORKSPACE/android-arm64-proof"
+      - name: Collect bounded guest kernel logs and stop emulator
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p android-arm64-proof
+          if [ -f "$RUNNER_TEMP/android-arm-build/emu.log" ]; then
+            tail -c 8388608 "$RUNNER_TEMP/android-arm-build/emu.log" > android-arm64-proof/emulator-tail.log
+          fi
+          if [ -f "$RUNNER_TEMP/android-arm-build/qemu.pid" ]; then
+            pid=$(cat "$RUNNER_TEMP/android-arm-build/qemu.pid")
+            kill "$pid" 2>/dev/null || true
+          fi
+          df -h . > android-arm64-proof/disk-after.txt
+      - uses: actions/upload-artifact@v4
+        name: Publish ARM64 guest boot evidence (not the Google image)
+        if: always()
+        with:
+          name: vm-fabric-android-arm64-tcg-proof
+          path: android-arm64-proof/
+          retention-days: 14
+          if-no-files-found: warn
