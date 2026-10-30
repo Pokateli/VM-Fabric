@@ -1,3 +1,21 @@
+## Milestone — real Android 9 arm64-v8a Launcher3 + stable systemReady (October 30, 2026)
+
+**Verified from real GitHub Actions artifact #13012470796, run #41127069219:**
+- Booted API 28 ARM64 Google APIs guest on x86_64 host via 1-vCPU TCG.
+- Guest `ro.product.cpu.abi=arm64-v8a`, ADB connected, `sys.boot_completed=1`.
+- Android `system_server` PID **1671** remained unchanged across all **five** 20-second-interval ADB observations; `Service package: found` for every sample; `PASS_STABLE_ANDROID_ARM64_PACKAGE_SERVICE`.
+- ADB resolves HOME to **`com.android.launcher3/.Launcher`**, `SurfaceFlinger` and window services respond, `wm size` is `320x480`.
+- ADB screenshot `android-screen-first.png` is **320x480 PNG, 69,340 bytes**; the image was opened and visually inspected and does show the Android home screen, Google search, Gmail, Photos, dialer, messages and status bar. Non-black pixel data alone was NOT used as visual proof.
+- Guest `userdata-arm64.qcow2` passed `qemu-img check` after shutdown.
+
+**Why this job nevertheless failed:** a *single* preliminary `package-service.txt` captured `Service package: not found` during early system_server startup, before the five later 100%-passing observations. The independent `portable-kit.py` packer incorrectly rejected this early diagnostic sample, despite stronger stable evidence. The initial sample is now accepted **only if** subsequent five same-PID samples and genuine Launcher3 framebuffer are fully verified. The old sample is retained for audit. Regression tests cover this exact real failure case and reject bogus initial text, PID changes, transient service or missing launcher.
+
+- Follow-up GitHub run [#41129772918](https://github.com/Pokateli/VM-Fabric/actions/runs/41129772918) started with corrected packer and new `LAUNCHER_HOME_EVIDENCE` gate; pending result at last check.
+- Main baseline remains experimental and unmodified by the selected OpenGL renderer; actual working candidate is isolated in this `android-arm64-legacy-hwui-lab-20261030` branch.
+- Full `portability` and **second boot after restoring** the private kit remain UNVERIFIED. Never declare image `ready` before confirming restoration and repeat boot. Avoid publishing Google SDK binaries in public releases. Experimental guest still uses permissive SELinux and upstream binary patches.
+
+---
+
 ## 2026-10-30 — system_server instability, exact stable-ready gate
 
 The actual post-GUI test [#41122478374](https://github.com/Pokateli/VM-Fabric/actions/runs/41122478374) again reached `systemReady`, but the Android PackageManager service was **flapping**:
