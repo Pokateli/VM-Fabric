@@ -1,0 +1,27 @@
+name: Android ARM64 VM-Fabric profile quick validation
+on:
+  push:
+    branches: [android-arm64-tcg-20261030]
+    paths:
+      - 'profiles/android-arm64/**'
+      - 'vmfabric.py'
+      - 'tests/test_android_arm64.py'
+      - '.github/workflows/test-android-arm64.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Python/Bash, Android SDK ABI gates and all existing profiles
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m compileall -q vmfabric.py profiles/android-arm64/scripts tests
+          for script in profiles/android-arm64/scripts/*.sh; do bash -n "$script"; done
+          python3 -m unittest discover -s tests -v
+          python3 vmfabric.py info android-arm64
+          echo 'PASS: Android ARM64 experimental profile does not modify existing ready Debian/Tiny11 profiles'
