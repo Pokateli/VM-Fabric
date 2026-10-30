@@ -120,6 +120,13 @@ def main():
                 log["parse_error"]=str(exc)
         logs.append(log)
         if attempt==1:time.sleep(15)
+    # SurfaceFlinger/RenderThread can crash even when PackageManager is up.
+    # Preserve a bounded Android crash buffer for subsequent graphics fixes.
+    crash_rc,crash_data,crash_err=adb_cmd("shell","logcat","-b","crash","-d","-t","300",timeout=45)
+    if crash_rc==0:
+        (proof/"android-crashlog.txt").write_bytes(crash_data[-512*1024:])
+    logs.append({"check":"crashlog","exit":crash_rc,"bytes":len(crash_data),
+                 "stderr":crash_err.decode(errors="replace")[:500]})
     (proof/"gui-inspection.json").write_text(json.dumps(logs,indent=2)+"\n")
     (proof/"GUI_RESULT.txt").write_text(status+"\n")
     print("ANDROID_GUI_STATUS="+status,flush=True)
