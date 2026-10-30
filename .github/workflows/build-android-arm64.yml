@@ -1,7 +1,7 @@
 name: Android ARM64 (API 28) first real TCG boot and ADB proof
 on:
   push:
-    branches: [android-arm64-tcg-20261030]
+    branches: [android-arm64-nojit-lab-20261030]
     paths:
       - '.github/workflows/build-android-arm64.yml'
   workflow_dispatch:
@@ -35,6 +35,7 @@ jobs:
       ANDROID_I_WANT_MY_TCG: 'yes'
       MEM: '4096'
       CORES: '1'
+      ART_PROFILE: 'nojit'
     steps:
       - uses: actions/checkout@v4
       - name: Reclaim free disk and install cross-architecture toolchain
@@ -115,6 +116,8 @@ jobs:
           python3 "$GITHUB_WORKSPACE/profiles/android-arm64/scripts/patch-guest-selinux.py" scripts/30-launch.sh |
             tee "$GITHUB_WORKSPACE/android-arm64-proof/selinux-launch-patch.txt"
           grep -q -- '-selinux permissive' scripts/30-launch.sh
+          python3 "$GITHUB_WORKSPACE/profiles/android-arm64/scripts/patch-art-experiment.py" scripts/40-bringup.sh --mode "$ART_PROFILE" | tee "$GITHUB_WORKSPACE/android-arm64-proof/art-experiment.txt"
+          grep -q 'setprop dalvik.vm.usejit false' scripts/40-bringup.sh
           file "$BUILD_DIR/init" | tee "$GITHUB_WORKSPACE/android-arm64-proof/init-file.txt"
           file "$BUILD_DIR/ramdisk-wrap.img" | tee "$GITHUB_WORKSPACE/android-arm64-proof/ramdisk-file.txt"
           grep -qi 'aarch64\|ARM aarch64' "$GITHUB_WORKSPACE/android-arm64-proof/init-file.txt"
