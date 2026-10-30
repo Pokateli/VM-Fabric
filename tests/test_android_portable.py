@@ -26,6 +26,8 @@ PARTS=(
  "proof/RESULT.txt",
  "proof/android-properties.txt",
  "proof/package-service.txt",
+ "proof/STABILITY_RESULT.txt",
+ "proof/stability-report.json",
 )
 PROPS="AndroidVersion.ApiLevel=28\nSystemImage.Abi=arm64-v8a\nSystemImage.TagId=google_apis\n"
 
@@ -45,6 +47,12 @@ class AndroidPortableKitTests(unittest.TestCase):
             if name.endswith("proof/RESULT.txt"):payload=b"PASS_REAL_ANDROID_ARM64_TCG_BOOT\n"
             if name.endswith("proof/android-properties.txt"):payload=b"ANDROID_ABI=arm64-v8a\n"
             if name.endswith("proof/package-service.txt"):payload=b"Service package: found\n"
+            if name.endswith("proof/STABILITY_RESULT.txt"):payload=b"PASS_STABLE_ANDROID_ARM64_PACKAGE_SERVICE\n"
+            if name.endswith("proof/stability-report.json"):
+                obs=[{"passed":True,"abi":{"stdout":"arm64-v8a"},
+                      "package":{"stdout":"Service package: found"}} for i in range(5)]
+                payload=json.dumps({"stable":True,"sample_count":5,
+                                    "interval_seconds":20,"observations":obs}).encode()
             target.write_bytes(payload)
         # Root model contains a private SDK cache which must not be transported.
         (self.src/"sdk/dl").mkdir()
@@ -92,6 +100,15 @@ class AndroidPortableKitTests(unittest.TestCase):
         x=self.call("pack",self.src,self.chunks)
         self.assertNotEqual(x.returncode,0)
         self.assertIn("package-service evidence",x.stderr)
+
+    def test_refuses_transient_package_service(self):
+        stable=self.src/"proof/stability-report.json"
+        doc=json.loads(stable.read_text())
+        doc["observations"][2]["package"]["stdout"]="Service package: not found"
+        stable.write_text(json.dumps(doc))
+        x=self.call("pack",self.src,self.chunks)
+        self.assertNotEqual(x.returncode,0)
+        self.assertIn("five real stable",x.stderr)
 
     def test_refuses_wrong_abi(self):
         p=self.src/"sdk/system-images/android-28/google_apis/arm64-v8a/source.properties"
