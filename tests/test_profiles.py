@@ -31,10 +31,15 @@ class ProfilesTest(unittest.TestCase):
         for key in ("build_script", "bootstrap_script", "run_script", "smoke_script"):
             self.assertTrue(vmfabric.script_path(p, folder, key).is_file())
 
-    def test_tiny11_is_intentionally_disabled(self):
-        p, _ = vmfabric.load_profile("tiny11")
-        with self.assertRaisesRegex(ValueError, "execution disabled"):
-            vmfabric.ready(p)
+    def test_tiny11_ready_and_offline(self):
+        p, folder = vmfabric.load_profile("tiny11")
+        vmfabric.ready(p)
+        self.assertEqual(p["os"], "windows")
+        self.assertEqual(p["compression"], "zstd")
+        self.assertEqual(set(p["runtime"]), {"chat","github"})
+        self.assertFalse(p["guest_network"])
+        for key in ("bootstrap_script","verify_script","run_script","console_script"):
+            self.assertTrue(vmfabric.script_path(p, folder, key).is_file())
 
     def test_reject_path_traversal(self):
         for value in ("../debian13", "/tmp", "debian13/../../secret", ""):
@@ -54,11 +59,11 @@ class ProfilesTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("debian13", proc.stdout)
         self.assertIn("tiny11", proc.stdout)
-        disabled = subprocess.run(
+        denied = subprocess.run(
             [sys.executable, str(ROOT / "vmfabric.py"), "run", "tiny11", "--command", "echo test"],
             capture_output=True, text=True)
-        self.assertEqual(disabled.returncode, 2)
-        self.assertIn("execution disabled", disabled.stderr)
+        self.assertEqual(denied.returncode, 2)
+        self.assertIn("do not support Bash", denied.stderr)
 
 
 if __name__ == "__main__":
