@@ -31,22 +31,29 @@ def verify(adb,serial,output,checks,interval):
     output.mkdir(parents=True,exist_ok=True)
     samples=[]
     stable=True
+    first_pid=None
     for i in range(checks):
         a=run_adb(adb,serial,["get-state"])
         b=run_adb(adb,serial,["shell","getprop","ro.product.cpu.abi"])
         c=run_adb(adb,serial,["shell","getprop","init.svc.zygote"])
         d=run_adb(adb,serial,["shell","service","check","package"],timeout=25)
+        pid=run_adb(adb,serial,["shell","pidof","system_server"],timeout=25)
+        if i==0:
+            first_pid=pid["stdout"] if pid["exit"]==0 else None
+        same_server=(pid["exit"]==0 and bool(first_pid) and
+                     pid["stdout"]==first_pid and first_pid.isdecimal())
         ok=(a["exit"]==0 and a["stdout"]=="device" and
             b["exit"]==0 and b["stdout"]=="arm64-v8a" and
             c["exit"]==0 and c["stdout"]=="running" and
-            d["exit"]==0 and parse_service(d["stdout"]))
+            d["exit"]==0 and parse_service(d["stdout"]) and same_server)
         samples.append({"sample":i+1,"time":int(time.time()),"adb":a,
-                        "abi":b,"zygote":c,"package":d,"passed":ok})
+                        "abi":b,"zygote":c,"package":d,
+                        "system_server_pid":pid,"same_server":same_server,"passed":ok})
         print(f"ANDROID_STABILITY_SAMPLE={i+1}/{checks} "+("PASS" if ok else "FAIL"),
               flush=True)
         if not ok:stable=False
         if i<checks-1:time.sleep(interval)
-    report={"schema":1,"sample_count":checks,"interval_seconds":interval,
+    report={"schema":2,"first_system_server_pid":first_pid,"sample_count":checks,"interval_seconds":interval,
             "window_seconds":(checks-1)*interval,
             "stable":stable,"observations":samples}
     (output/"stability-report.json").write_text(json.dumps(report,indent=2)+"\n")
