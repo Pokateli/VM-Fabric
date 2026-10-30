@@ -41,6 +41,12 @@ def qimg():
         if binary.is_file() and ld.is_file():
             return [str(ld),"--library-path",str(p/"lib"),str(binary)]
         if binary.is_file():return [str(binary)]
+    for root in (Path("/mnt/data/tiny11-qemu-vga-fixed/tiny11-qemu-runtime-linux-amd64"),
+                 Path("/mnt/data/tiny11-qemu-runtime-linux-amd64")):
+        binary=root/"bin/qemu-img"
+        ld=root/"lib/ld-linux-x86-64.so.2"
+        if binary.is_file() and ld.is_file():
+            return [str(ld),"--library-path",str(root/"lib"),str(binary)]
     binary=shutil.which("qemu-img")
     if not binary:raise RuntimeError("qemu-img missing; set QEMU_HOME to portable QEMU root")
     return [binary]
