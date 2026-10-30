@@ -22,7 +22,17 @@ export CORES=1
 export MEM=4096
 mkdir -p "$SESSION/second-boot-proof"
 PROOF="$SESSION/second-boot-proof"
-cd "$KIT/upstream-src"
+SOURCE="$KIT/upstream-src"
+if [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "safemode" ]; then
+  # Never patch the verified SDK/source kit; modify only a per-session copy.
+  SOURCE="$SESSION/upstream-src-safemode"
+  cp -a "$KIT/upstream-src" "$SOURCE"
+  python3 "$HERE/patch-safemode-experiment.py" "$SOURCE/scripts/40-bringup.sh"
+elif [ "${ANDROID_SHORTCUT_TEST:-baseline}" != "baseline" ]; then
+  echo "Unknown Android ShortcutService experiment" >&2
+  exit 2
+fi
+cd "$SOURCE"
 cleanup() {
   if [ -s "$BUILD_DIR/qemu.pid" ]; then
     pid=$(cat "$BUILD_DIR/qemu.pid")
@@ -37,6 +47,11 @@ bash "$HERE/boot-monitor.sh" "$PROOF" 45 &
 watchdog_pid=$!
 trap 'kill "$watchdog_pid" 2>/dev/null || true; cleanup' EXIT
 bash "$HERE/boot-gate.sh" "$PWD" "$BUILD_DIR" "$PROOF"
+if [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "safemode" ]; then
+  actual="$(timeout 35 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.sys.safemode | tr -d '\r')"
+  printf 'GUEST_SAFE_MODE=%s\n' "$actual" | tee "$PROOF/shortcut-experiment.txt"
+  [ "$actual" = 1 ] || { echo "Safe mode was not enabled in Android WindowManagerService" >&2; exit 88; }
+fi
 python3 "$HERE/verify-stable-ready.py" --sdk-root "$SDK_ROOT" --proof-dir "$PROOF" --checks 5 --interval 20
 timeout 300 python3 "$HERE/inspect-gui.py" --sdk-root "$SDK_ROOT" --proof-dir "$PROOF"
 grep -Fxq 'PASS_STABLE_ANDROID_ARM64_PACKAGE_SERVICE' "$PROOF/STABILITY_RESULT.txt"
