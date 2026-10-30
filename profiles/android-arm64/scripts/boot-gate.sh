@@ -29,6 +29,19 @@ cleanup() {
 }
 trap cleanup EXIT
 while kill -0 "$child" 2>/dev/null; do
+  # If an older Android Emulator rejects the restored QCOW2 overlay and exits,
+  # there will never be an ADB device. Do not wait for the full timeout.
+  if [ -f "$BUILD_DIR/qemu.pid" ]; then
+    read -r qemu_pid < "$BUILD_DIR/qemu.pid" || true
+    if [[ "$qemu_pid" =~ ^[0-9]+$ ]]; then
+      qemu_status="$(ps -p "$qemu_pid" -o stat= 2>/dev/null || true)"
+      if [[ -z "$qemu_status" || "$qemu_status" == Z* ]]; then
+        record "GUEST_QEMU_PROCESS_EXITED_EARLY"
+        [ -f "$EMU_LOG" ] && tail -60 "$EMU_LOG" > "$PROOF_DIR/qemu-exit-tail.log"
+        exit 82
+      fi
+    fi
+  fi
   if [ -f "$EMU_LOG" ] && grep -Eq "$FATAL_PATTERN" "$EMU_LOG"; then
     grep -E "$FATAL_PATTERN" "$EMU_LOG" | tail -15 > "$PROOF_DIR/guest-fatal.txt"
     record "GUEST_FATAL_EARLY_INIT_STOP"
