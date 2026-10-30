@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Second-boot smoke test of a PRIVATE verified Android ARM64 bundle.
+# Run only inside a dedicated Linux network namespace with loopback enabled.
+# Preserve the kit's /data base via prepare-restore.py overlay.
+set -Eeuo pipefail
+(( $# == 2 )) || { echo "Usage: boot-restored.sh RESTORED_KIT SESSION" >&2; exit 2; }
+KIT="$(realpath "$1")"
+SESSION="$(realpath "$2")"
+HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ "$(readlink /proc/1/ns/net)" == "$(readlink /proc/self/ns/net)" ]]; then
+  echo "Refuse to start Android guest outside a dedicated network namespace" >&2
+  exit 2
+fi
+test -f "$SESSION/session.json"
+test -s "$SESSION/build/userdata-arm64.qcow2"
+test -L "$SESSION/build/ramdisk-wrap.img"
+test -L "$SESSION/build/dex"
+export SDK_ROOT="$KIT/sdk"
+export BUILD_DIR="$SESSION/build"
+export ANDROID_I_WANT_MY_TCG=yes
+export CORES=1
+export MEM=4096
+mkdir -p "$SESSION/second-boot-proof"
+PROOF="$SESSION/second-boot-proof"
+cd "$KIT/upstream-src"
+cleanup() {
+  if [ -s "$BUILD_DIR/qemu.pid" ]; then
+    pid=$(cat "$BUILD_DIR/qemu.pid")
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+      kill -TERM "$pid" 2>/dev/null || true
+    fi
+  fi
+}
+trap cleanup EXIT
+timeout 90 sh scripts/30-launch.sh
+bash "$HERE/boot-monitor.sh" "$PROOF" 45 &
+watchdog_pid=$!
+trap 'kill "$watchdog_pid" 2>/dev/null || true; cleanup' EXIT
+bash "$HERE/boot-gate.sh" "$PWD" "$BUILD_DIR" "$PROOF"
+python3 "$HERE/verify-stable-ready.py" --sdk-root "$SDK_ROOT" --proof-dir "$PROOF" --checks 5 --interval 20
+timeout 300 python3 "$HERE/inspect-gui.py" --sdk-root "$SDK_ROOT" --proof-dir "$PROOF"
+grep -Fxq 'PASS_STABLE_ANDROID_ARM64_PACKAGE_SERVICE' "$PROOF/STABILITY_RESULT.txt"
+grep -Fxq 'LAUNCHER_HOME_EVIDENCE' "$PROOF/GUI_RESULT.txt"
+echo PASS_SECOND_ANDROID_ARM64_LAUNCHER_BOOT | tee "$PROOF/RESULT.txt"
+timeout 80 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 reboot -p || true
+sleep 10
+cleanup
+if [ -s "$BUILD_DIR/qemu.pid" ]; then
+  pid=$(cat "$BUILD_DIR/qemu.pid")
+  for i in $(seq 1 30); do
+    if ! kill -0 "$pid" 2>/dev/null; then break; fi
+    state=$(ps -p "$pid" -o stat= 2>/dev/null || true)
+    if [[ "$state" == Z* ]]; then break; fi
+    sleep 2
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    state=$(ps -p "$pid" -o stat= 2>/dev/null || true)
+    [[ "$state" == Z* ]] || { echo "QEMU still running; refusing QCOW2 inspection" >&2; exit 84; }
+  fi
+fi
+qemu-img check -f qcow2 "$BUILD_DIR/userdata-arm64.qcow2" > "$PROOF/qcow2-check.txt"
+echo PASS_SECOND_ANDROID_ARM64_QCOW2_CHECK | tee -a "$PROOF/RESULT.txt"
