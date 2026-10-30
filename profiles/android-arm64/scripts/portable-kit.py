@@ -26,6 +26,8 @@ REQUIRED = (
     "proof/RESULT.txt",
     "proof/android-properties.txt",
     "proof/package-service.txt",
+    "proof/STABILITY_RESULT.txt",
+    "proof/stability-report.json",
     "sdk/system-images/android-28/google_apis/arm64-v8a/system.img",
     "sdk/system-images/android-28/google_apis/arm64-v8a/vendor.img",
     "sdk/system-images/android-28/google_apis/arm64-v8a/kernel-ranchu",
@@ -146,6 +148,18 @@ def verify_input(root):
     pkg=(root/"proof/package-service.txt").read_text()
     if abi!="ANDROID_ABI=arm64-v8a" or not re.search(r"(?im)^\s*Service\s+package:\s+found\s*$",pkg):
         raise ValueError("Refuse to pack Android without matching ADB ABI and package-service evidence")
+    if (root/"proof/STABILITY_RESULT.txt").read_text().strip()!="PASS_STABLE_ANDROID_ARM64_PACKAGE_SERVICE":
+        raise ValueError("Refuse to pack unstable Android userland")
+    stability=json.loads((root/"proof/stability-report.json").read_text())
+    obs=stability.get("observations",[])
+    if (stability.get("stable") is not True or len(obs)<5 or
+        len(obs)!=stability.get("sample_count") or
+        stability.get("interval_seconds",0)<15 or
+        any(item.get("passed") is not True or
+            item.get("abi",{}).get("stdout")!="arm64-v8a" or
+            not re.fullmatch(r"Service package: found\s*",item.get("package",{}).get("stdout",""))
+            for item in obs)):
+        raise ValueError("Refuse to pack without five real stable ARM64 ADB service samples")
     props=(root/"sdk/system-images/android-28/google_apis/arm64-v8a/source.properties").read_text()
     metadata=dict(s.strip().split("=",1) for s in props.splitlines() if "=" in s)
     if (metadata.get("AndroidVersion.ApiLevel")!="28" or
