@@ -1,3 +1,15 @@
+## 2026-10-30 — FIRST SUCCESSFUL PRIVATE ANDROID ARM64 KIT
+
+**Confirmed GitHub Actions [#41129772918](https://github.com/Pokateli/VM-Fabric/actions/runs/41129772918) concluded success in BOTH jobs.** The private artifact `vm-fabric-android-arm64-private-kit` ID **13012994299** was uploaded, size **1,490,154,912 bytes** (about 1.49 GB decimal). This is not merely a proof log: it contains the streamed compressed Android SDK/system images, pinned emulator, ramdisk, source scripts, precompiled helper DEX files and cleanly shut-down `userdata-arm64.qcow2`. A separate evidence artifact `vm-fabric-android-arm64-tcg-proof` ID **13013193695** was uploaded. The published zip digest reported by GitHub Actions for the private kit artifact is `1e938d327b247750a483be9aadc36ff2e1e692bcb39ee024986716b02950bd32` (artifact transport zip checksum, not individual shard checksum).
+
+In this run the corrected initial PackageManager logic was combined with **five stable same-PID `system_server` observations** and the `LAUNCHER_HOME_EVIDENCE` gate (Android Launcher3 window service, `sys.boot_completed=1`, and nonblack actual ADB PNG). Emulator shutdown and `qemu-img check` completed before the read-only pack operation. The artifact is stored **privately in GitHub Actions**; no public Android SDK release was created.
+
+**Next rigorous requirement:** recover the artifact into a clean runner, SHA256-check and unpack all shards, verify SDK ABI and disk integrity, then boot a separate QCOW2 session overlay and prove stable ADB, Launcher3 and a clean poweroff. That separate workflow is [#41132811947](https://github.com/Pokateli/VM-Fabric/actions/runs/41132811947), built from `.github/workflows/test-android-arm64-restored.yml`. When last inspected, it was installing minimal host runtime requirements and had NOT yet proved a second Android boot. Never promote VM-Fabric Android to `ready` on the strength of the first boot alone.
+
+A fast multishard transport roundtrip/tampering test (forced 128-byte chunks on a synthetic tiny kit) and immutable QCOW2 overlay mock tests have passed **48/48** in [#41132873615](https://github.com/Pokateli/VM-Fabric/actions/runs/41132873615).
+
+---
+
 ## Milestone — real Android 9 arm64-v8a Launcher3 + stable systemReady (October 30, 2026)
 
 **Verified from real GitHub Actions artifact #13012470796, run #41127069219:**
