@@ -16,8 +16,11 @@ def check(target, live=False):
         if not path.is_file() or path.stat().st_size==0:
             raise ValueError("Missing real Android ARM64 SDK asset: "+str(path))
     source=(img/"source.properties").read_text()
-    if "Pkg.Path=system-images;android-28;google_apis;arm64-v8a" not in source:
-        raise ValueError("Wrong Android ABI or SDK release")
+    properties=dict(line.strip().split("=",1) for line in source.splitlines() if "=" in line)
+    if (properties.get("SystemImage.Abi")!="arm64-v8a" or
+        properties.get("AndroidVersion.ApiLevel")!="28" or
+        properties.get("SystemImage.TagId")!="google_apis"):
+        raise ValueError("Wrong Android ABI or SDK release: "+str(properties))
     if (sdk/"emulator/.pinned").read_text().strip()!="16489710":
         raise ValueError("Emulator build ID differs from pinned and patch-verified emulator")
     if not (root/"build/ramdisk-wrap.img").is_file():
