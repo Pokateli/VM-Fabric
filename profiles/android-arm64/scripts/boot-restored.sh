@@ -60,3 +60,17 @@ if [ -s "$BUILD_DIR/qemu.pid" ]; then
 fi
 qemu-img check -f qcow2 "$BUILD_DIR/userdata-arm64.qcow2" > "$PROOF/qcow2-check.txt"
 echo PASS_SECOND_ANDROID_ARM64_QCOW2_CHECK | tee -a "$PROOF/RESULT.txt"
+# Verify original, immutable /data base has not changed after guest poweroff.
+python3 - "$SESSION/session.json" "$KIT/build/userdata-arm64.qcow2" <<'PY'
+import hashlib,json,pathlib,sys
+record=json.loads(pathlib.Path(sys.argv[1]).read_text())
+base=pathlib.Path(sys.argv[2])
+h=hashlib.sha256()
+with base.open("rb") as inp:
+    for chunk in iter(lambda:inp.read(4*1024*1024),b""):
+        h.update(chunk)
+if h.hexdigest()!=record["base_sha256"]:
+    raise SystemExit("IMMUTABLE_BASE_QCOW2_HASH_CHANGED")
+print("PASS_SECOND_ANDROID_ARM64_IMMUTABLE_BASE")
+PY
+echo PASS_SECOND_ANDROID_ARM64_IMMUTABLE_BASE | tee -a "$PROOF/RESULT.txt"
