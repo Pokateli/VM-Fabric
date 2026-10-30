@@ -64,6 +64,10 @@ def launch(args):
         return subprocess.call(["bash", str(shell)], env=env, cwd=ROOT)
     if args.operation == "verify":
         target = (args.target or default_target(args.profile)).resolve()
+        if p.get("os") == "windows":
+            runner = script_path(p, folder, "verify_script")
+            return subprocess.call([sys.executable, str(runner), "verify",
+                                    "--vm-dir", str(target)])
         if not (target / "DEBIAN_IMAGE_SHA512SUMS").is_file():
             raise ValueError(f"Missing VM base image at {target}")
         checks = [
@@ -78,6 +82,8 @@ def launch(args):
                 return rc
         return 0
     if args.operation == "run":
+        if p.get("os") == "windows" and (args.command is not None or args.script is not None):
+            raise ValueError("Windows GUI profiles do not support Bash --command or --script; use console instead")
         mode = args.mode
         if mode != "auto" and mode not in p.get("runtime", []):
             raise ValueError(f"{args.profile} does not support runtime {mode}")
@@ -93,6 +99,17 @@ def launch(args):
             cmd.extend(["--log", str(args.log.resolve())])
         if args.output is not None:
             cmd.extend(["--output", str(args.output.resolve())])
+        return subprocess.call(cmd)
+    if args.operation == "console":
+        if p.get("os") != "windows":
+            raise ValueError("Console GUI commands are supported only for Windows profiles")
+        helper = script_path(p, folder, "console_script")
+        target = (args.target or default_target(args.profile)).resolve()
+        cmd = [sys.executable, str(helper), args.action, "--vm-dir", str(target)]
+        if args.output is not None:
+            cmd.extend(["--output", str(args.output.resolve())])
+        if args.keys is not None:
+            cmd.extend(["--keys", args.keys])
         return subprocess.call(cmd)
     raise ValueError(f"Unsupported operation: {args.operation}")
 
@@ -123,6 +140,12 @@ def main():
     run.add_argument("--log", type=Path)
     run.add_argument("--output", type=Path)
     run.add_argument("--timeout", type=int, default=240)
+    console = sub.add_parser("console", help="Control an offline Tiny11 QEMU GUI session")
+    console.add_argument("profile")
+    console.add_argument("--target", type=Path)
+    console.add_argument("action", choices=("status", "screenshot", "wake", "powerdown", "sendkey"))
+    console.add_argument("--output", type=Path)
+    console.add_argument("--keys")
     args = parser.parse_args()
     try:
         if args.operation == "list":
