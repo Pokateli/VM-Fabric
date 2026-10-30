@@ -1,0 +1,73 @@
+name: Run Tiny11 Windows desktop under GitHub KVM (VM-Fabric)
+on:
+  workflow_dispatch:
+    inputs:
+      probe_seconds:
+        description: 'Maximum time for Windows second-boot verification (seconds)'
+        default: '480'
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  tiny11-kvm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reclaim runner capacity and install QEMU KVM with OVMF
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 qemu-utils ovmf
+          test -c /dev/kvm && sudo chmod a+rw /dev/kvm && test -w /dev/kvm
+          df -h .
+      - name: Download verified private Tiny11 image from VM-Fabric Release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/tiny11-parts"
+          gh release download tiny11-v1.0.0-fabric --repo "$GITHUB_REPOSITORY" \
+            --pattern 'part-*.bin' --pattern 'ready-parts.json' --dir "$RUNNER_TEMP/tiny11-parts"
+          test -s "$RUNNER_TEMP/tiny11-parts/ready-parts.json"
+      - name: Deploy Tiny11 and verify immutable compressed image SHA256
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 vmfabric.py deploy tiny11 --archive "$RUNNER_TEMP/tiny11-parts" --target "$RUNNER_TEMP/vm-fabric/tiny11"
+          rm -rf "$RUNNER_TEMP/tiny11-parts"
+          python3 vmfabric.py verify tiny11 --target "$RUNNER_TEMP/vm-fabric/tiny11"
+          df -h .
+      - name: Real Windows second-boot proof on Linux KVM, no guest networking
+        shell: bash
+        timeout-minutes: 14
+        env:
+          PROBE_TIMEOUT: ${{ inputs.probe_seconds }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$PROBE_TIMEOUT" =~ ^[0-9]{2,4}$ ]]
+          test "$PROBE_TIMEOUT" -ge 120 && test "$PROBE_TIMEOUT" -le 660
+          mkdir -p output
+          python3 vmfabric.py run tiny11 --mode github --target "$RUNNER_TEMP/vm-fabric/tiny11" --timeout "$PROBE_TIMEOUT"
+          cp "$RUNNER_TEMP/vm-fabric/tiny11/probe-result.json" output/probe-result.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open('output/probe-result.json'))
+          assert r['boot_confirmed'] and r['probe_overlay_discarded']
+          print('Real Windows second boot confirmed by FAT/COM1, base disk preserved')
+          PY
+      - name: Upload sanitized boot evidence only (no Windows disk or passwords)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiny11-kvm-vmfabric-proof
+          path: |
+            output/probe-result.json
+            ${{ runner.temp }}/vm-fabric/tiny11/qemu-probe.log
+            ${{ runner.temp }}/vm-fabric/tiny11/qemu-serial.log
+          retention-days: 7
+          if-no-files-found: warn
