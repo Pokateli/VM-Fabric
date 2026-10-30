@@ -50,7 +50,10 @@ def launch(args):
     if args.operation == "info":
         print(json.dumps(p, ensure_ascii=False, indent=2))
         return 0
-    ready(p)
+    # Experimental profiles can be inspected, deployed and verified for development.
+    # Only execution and image-building require a completed, ready profile.
+    if args.operation in ("run", "build"):
+        ready(p)
     if args.operation == "deploy":
         shell = script_path(p, folder, "bootstrap_script")
         dest = args.target or default_target(args.profile)
