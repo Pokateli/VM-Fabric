@@ -29,6 +29,7 @@ class AndroidStableTests(unittest.TestCase):
             if command==["get-state"]:return sample("device")
             if command[-1]=="ro.product.cpu.abi":return sample("arm64-v8a")
             if command[-1]=="init.svc.zygote":return sample("running")
+            if command[-2:]==["pidof","system_server"]:return sample("1777")
             if command[-2:]==["check","package"]:
                 counter["n"]+=1
                 return sample("Service package: not found" if counter["n"]==3
@@ -45,11 +46,33 @@ class AndroidStableTests(unittest.TestCase):
                              [True,True,False,True,True])
             self.assertIn("FAIL_UNSTABLE",(Path(td)/"STABILITY_RESULT.txt").read_text())
 
+    def test_service_pid_restart_causes_failure_even_if_package_found(self):
+        counter={"pid":0}
+        def fake(_adb,_serial,command,timeout=15):
+            if command==["get-state"]:return sample("device")
+            if command[-1]=="ro.product.cpu.abi":return sample("arm64-v8a")
+            if command[-1]=="init.svc.zygote":return sample("running")
+            if command[-2:]==["check","package"]:return sample("Service package: found")
+            if command[-2:]==["pidof","system_server"]:
+                counter["pid"]+=1
+                return sample("1888" if counter["pid"]>=3 else "1777")
+            raise AssertionError(command)
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.object(module,"run_adb",side_effect=fake),mock.patch.object(module.time,"sleep"):
+                with self.assertRaises(SystemExit) as raised:
+                    module.verify(Path("adb"),"emulator-5554",Path(td),5,20)
+            self.assertEqual(raised.exception.code,87)
+            report=json.loads((Path(td)/"stability-report.json").read_text())
+            self.assertFalse(report["stable"])
+            self.assertEqual([x["same_server"] for x in report["observations"]],
+                             [True,True,False,False,False])
+
     def test_stable_service_requires_five_confirmed_samples(self):
         def fake(_adb,_serial,command,timeout=15):
             if command==["get-state"]:return sample("device")
             if command[-1]=="ro.product.cpu.abi":return sample("arm64-v8a")
             if command[-1]=="init.svc.zygote":return sample("running")
+            if command[-2:]==["pidof","system_server"]:return sample("1777")
             if command[-2:]==["check","package"]:return sample("Service package: found")
             raise AssertionError(command)
         with tempfile.TemporaryDirectory() as td:
