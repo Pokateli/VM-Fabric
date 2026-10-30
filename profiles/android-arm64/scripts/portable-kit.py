@@ -164,9 +164,16 @@ def pack(root, dest):
     # dereference SDK-internal symlinks into actual files so the bundle is
     # independent of host sysroot paths and is restorable as regular files.
     with tarfile.open(fileobj=writer,mode="w|gz",format=tarfile.PAX_FORMAT,dereference=True) as tar:
+        allowed_roots=tuple((root/name).resolve() for name in ROOTS)
         def filt(member):
             nonlocal files,total
             if excluded(member.name):return None
+            # tar dereferences SDK symlinks for portable reuse. Never let a
+            # malicious source symlink smuggle host files outside the intended
+            # SDK/build/upstream/proof roots into the private bundle.
+            resolved=(root/member.name).resolve()
+            if not any(resolved==base or resolved.is_relative_to(base) for base in allowed_roots):
+                raise ValueError("Android bundle symlink escapes its input roots: "+member.name)
             if not (member.isfile() or member.isdir()):
                 raise ValueError("Unexpected non-file in Android bundle: "+member.name)
             if member.isfile():
