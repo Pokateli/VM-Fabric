@@ -70,7 +70,18 @@ jobs:
           timeout 3400 sh scripts/00-setup.sh 2>&1 | tee "$GITHUB_WORKSPACE/android-arm64-proof/download.log"
           test -s "$SDK_ROOT/system-images/android-28/google_apis/arm64-v8a/system.img"
           test -s "$SDK_ROOT/system-images/android-28/google_apis/arm64-v8a/kernel-ranchu"
-          grep -q '^Pkg.Path=system-images;android-28;google_apis;arm64-v8a' "$SDK_ROOT/system-images/android-28/google_apis/arm64-v8a/source.properties"
+          echo 'Official Android system image metadata:'
+          grep -E '^(AndroidVersion.ApiLevel|SystemImage.Abi|SystemImage.TagId)=' "$SDK_ROOT/system-images/android-28/google_apis/arm64-v8a/source.properties"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'android-sdk-arm64/system-images/android-28/google_apis/arm64-v8a/source.properties'
+          data=dict(line.strip().split('=',1) for line in p.read_text().splitlines() if '=' in line)
+          assert data.get('AndroidVersion.ApiLevel')=='28',data
+          assert data.get('SystemImage.Abi')=='arm64-v8a',data
+          assert data.get('SystemImage.TagId')=='google_apis',data
+          print('PASS Android API 28 Google APIs ARM64 ABI from original source.properties')
+          PY
           file "$SDK_ROOT/system-images/android-28/google_apis/arm64-v8a/kernel-ranchu" | tee "$GITHUB_WORKSPACE/android-arm64-proof/kernel-file.txt"
           df -h .
       - name: Prepare verified AOSP images and compile ARM64 init wrapper
