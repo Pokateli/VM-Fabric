@@ -8,6 +8,7 @@
 | --- | --- | --- | --- | --- |
 | \`debian13\` | Debian GNU/Linux 13 (amd64) | **Ready** | ChatGPT, GitHub Actions | QEMU/TCG; internally zlib-compressed QCOW2 |
 | `tiny11` | Windows 11 Enterprise Evaluation / Tiny11 | **Ready for testing** | ChatGPT TCG GUI, GitHub KVM | ZSTD-QCOW2; first and second boots verified; evaluation license expired |
+| `android-arm64` | Android 9 ARM64 (API 28, first baseline) | **Experimental** | Google ARM64 Emulator / QEMU TCG | Official arm64-v8a SDK with experimental init/TCG patches; actual ADB proof pending |
 
 The Windows profile was tested in both GitHub KVM and a ChatGPT TCG sandbox, including a real graphical Windows desktop. New OSes are added through `profiles/<id>/profile.json` and their own scripts.
 
@@ -21,6 +22,35 @@ The Windows profile was tested in both GitHub KVM and a ChatGPT TCG sandbox, inc
 - `profiles/tiny11/` — ready offline Windows 11 profile with SHA256-checked shard restore, immutable ZSTD base, per-session writable QCOW2 overlay, and local QEMU console commands.
 
 The runtime always uses QEMU TCG, requires no \`/dev/kvm\` or root in the ChatGPT sandbox, and runs with the guest network disabled. Only the **build on GitHub Actions** requires Docker, sudo and network access to fetch official upstream Debian images. The QEMU guest does **not** have network access.
+
+## Android ARM64 (new experimental profile)
+
+The new profile `profiles/android-arm64` targets **native ARM64 Android guest
+userspace**, not Android-x86 and not an x86 guest that translates ARM apps.
+It uses Google's ARM64 `ranchu` emulator with **software QEMU TCG** to run
+on our x86_64 ChatGPT/GitHub hosts. x86_64 KVM cannot accelerate an ARM64
+guest, so this is slower than Tiny11.
+
+The initial reproducible target is Android 9 (API 28) with
+`SystemImage.Abi=arm64-v8a`. A pinned MIT experiment
+`lhns/android-arm-tcg` provides byte-verified early-boot/Android
+workarounds. This code alters the guest init, removes HAL services, disables
+data encryption and disables SELinux enforcement during bring-up: it is
+**development-only**, not safe for personal Google accounts or secrets.
+
+[Android ARM64 build + real ADB proof](https://github.com/Pokateli/VM-Fabric/actions/workflows/build-android-arm64.yml)
+is being tested on the separate branch
+`android-arm64-tcg-20261030`. The gate for `ready` is **not** a green
+download or an Android emulator process: the guest must actually report
+`ro.product.cpu.abi=arm64-v8a` through ADB and a running package service.
+A real GUI screenshot will then be tested independently.
+
+See [Android ARM64 profile notes](profiles/android-arm64/README.md).
+The code already includes a local-only ADB screenshot, keyboard and touch
+console for when a live emulator is available. The guest has never been
+claimed to boot inside this chat: 4GiB total sandbox RAM can be too small
+for the upstream 4GiB-guest systemReady configuration. Any reduced-memory
+profile requires separate functional testing.
 
 ## Tiny11 / Windows 11 — dual-mode VM profile
 
