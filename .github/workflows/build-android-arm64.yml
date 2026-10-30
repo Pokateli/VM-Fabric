@@ -200,6 +200,8 @@ jobs:
           grep -Fxq 'PASS_REAL_ANDROID_ARM64_TCG_BOOT' android-arm64-proof/RESULT.txt
           grep -Fxq 'ANDROID_ABI=arm64-v8a' android-arm64-proof/android-properties.txt
           grep -Fxq 'PASS_STABLE_ANDROID_ARM64_PACKAGE_SERVICE' android-arm64-proof/STABILITY_RESULT.txt
+          grep -Fxq 'LAUNCHER_HOME_EVIDENCE' android-arm64-proof/GUI_RESULT.txt
+          test -s android-arm64-proof/android-screen-first.png
           # A live QCOW2 must never be snapshotted. Guest shutdown and
           # QEMU process termination are verified before reading /data.
           pid=$(cat "$RUNNER_TEMP/android-arm-build/qemu.pid")
