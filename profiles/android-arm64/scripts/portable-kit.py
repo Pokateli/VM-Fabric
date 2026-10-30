@@ -37,7 +37,12 @@ REQUIRED = (
     "build/userdata-arm64.qcow2",
     "upstream-src/scripts/40-bringup.sh",
 )
-EXCLUDE = ("sdk/dl", "build/rd", "upstream-src/.git")
+EXCLUDE = ("sdk/dl", "build/rd", "upstream-src/.git",
+           # Root-owned emulator runtime book-keeping can have mode 000.
+           # Neither boots nor portability require these transient files.
+           "sdk/system-images/android-28/google_apis/arm64-v8a/bootcompleted.ini",
+           "sdk/system-images/android-28/google_apis/arm64-v8a/hardware-qemu.ini.lock",
+           "sdk/system-images/android-28/google_apis/arm64-v8a/multiinstance.lock")
 ROOTS = ("sdk", "build", "upstream-src", "proof")
 MAX_BYTES = 40 * 1024**3
 MAX_FILES = 100000
@@ -123,6 +128,10 @@ class PartReader:
         return block
 
 def excluded(path):
+    # Runtime lock/cache files are not part of a reproducible Android base.
+    if path.rsplit("/",1)[-1] in ("bootcompleted.ini", "hardware-qemu.ini.lock",
+                                  "multiinstance.lock"):
+        return True
     return any(path==x or path.startswith(x+"/") for x in EXCLUDE)
 
 def verify_input(root):
