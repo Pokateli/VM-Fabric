@@ -1,0 +1,124 @@
+name: AUPE pinned AmneziaWG Go trusted Noise telemetry candidate
+on:
+  push:
+    paths:
+      - '.github/workflows/aupe-amneziawg-noise-events.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.0'
+          cache: false
+      - name: Pin original and apply S4 plus Noise event patches
+        run: |
+          set -Eeuo pipefail
+          git clone https://github.com/amnezia-vpn/amneziawg-go.git upstream
+          git -C upstream checkout --detach b5928efb6ca19f0153958460c3d141f04abc5c2e
+          test "$(git -C upstream rev-parse HEAD)" = b5928efb6ca19f0153958460c3d141f04abc5c2e
+          python3 tools/aupe/patch_tun_padding.py upstream/device/send.go
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("upstream/device")
+          def patch(name,old,new):
+              path=root/name
+              content=path.read_text()
+              assert content.count(old)==1,(name,content.count(old))
+              path.write_text(content.replace(old,new,1))
+          patch("timers.go",'\t\tpeer.timers.handshakeAttempts.Add(1)\n','\t\tpeer.timers.handshakeAttempts.Add(1)\n\t\tpeer.emitNoiseEvent("timeout", 0)\n')
+          patch("receive.go",'\t\t\tpeer.timersHandshakeComplete()\n\t\t\tpeer.SendKeepalive()','\t\t\tpeer.timersHandshakeComplete()\n\t\t\tpeer.emitConfirmedNoiseEvent()\n\t\t\tpeer.SendKeepalive()')
+          PY
+          cat > upstream/device/aupe_noise_event.go <<'GO'
+          // SPDX-License-Identifier: MIT
+          // AUPE opt-in, best-effort LOCAL Noise telemetry for experimental controller.
+          // No keys, peer indexes, endpoint IPs, or plaintext are emitted.
+          package device
+          
+          import (
+              "encoding/json"
+              "net"
+              "os"
+              "path/filepath"
+              "sync"
+              "sync/atomic"
+              "time"
+          )
+          type aupeNoiseEvent struct {
+              Version int `json:"version"`
+              Sequence uint64 `json:"sequence"`
+              Outcome string `json:"outcome"`
+              RTTms int64 `json:"rtt_ms"`
+          }
+          var aupeEventState struct {
+              once sync.Once
+              sequence atomic.Uint64
+              path string
+              events chan aupeNoiseEvent
+          }
+          func (peer *Peer) emitNoiseEvent(outcome string, rttMs int64) {
+              aupeEventState.once.Do(func(){
+                  path := os.Getenv("AUPE_NOISE_EVENTS_SOCKET")
+                  if !filepath.IsAbs(path) || filepath.Clean(path)!=path{return}
+                  aupeEventState.path=path
+                  aupeEventState.events=make(chan aupeNoiseEvent,128)
+                  go func(){
+                      for ev:=range aupeEventState.events {
+                          c,err:=net.DialTimeout("unix",aupeEventState.path,100*time.Millisecond)
+                          if err!=nil{continue}
+                          _=c.SetWriteDeadline(time.Now().Add(100*time.Millisecond))
+                          _=json.NewEncoder(c).Encode(ev)
+                          _=c.Close()
+                      }
+                  }()
+              })
+              if aupeEventState.events==nil{return}
+              ev:=aupeNoiseEvent{Version:1,Sequence:aupeEventState.sequence.Add(1),Outcome:outcome,RTTms:rttMs}
+              select{case aupeEventState.events<-ev:default:}
+          }
+          func (peer *Peer) emitConfirmedNoiseEvent(){
+              peer.handshake.mutex.RLock()
+              sent:=peer.handshake.lastSentHandshake
+              peer.handshake.mutex.RUnlock()
+              if sent.IsZero(){return}
+              rtt:=time.Since(sent).Milliseconds()
+              if rtt<1{rtt=1}
+              if rtt>60000{return}
+              peer.emitNoiseEvent("confirmed",rtt)
+          }
+          GO
+          (cd upstream && gofmt -w device/aupe_noise_event.go device/timers.go device/receive.go device/send.go)
+          mkdir -p output
+          git -C upstream diff --binary > output/AUPE_NOISE_EVENTS_AND_S4.patch
+          cat upstream/device/aupe_noise_event.go > output/AUPE_NOISE_EVENT_NEWFILE.go
+          test -s output/AUPE_NOISE_EVENTS_AND_S4.patch
+      - name: Compile, vet and publish checksummed binary
+        run: |
+          set -Eeuo pipefail
+          (cd upstream && go test ./device -run '^$' && go vet ./device)
+          (cd upstream && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o ../output/amneziawg-go-noise-events .)
+          chmod 755 output/amneziawg-go-noise-events
+          output/amneziawg-go-noise-events --version
+          cp upstream/LICENSE output/LICENSE
+          printf '%s\n' b5928efb6ca19f0153958460c3d141f04abc5c2e > output/UPSTREAM_COMMIT
+          cat > output/README.txt <<'TXT'
+          Experimental upstream AmneziaWG Go fork for AUPE VM testing.
+          Includes S4 stale TUN offset fix and optional local Unix Noise event emission.
+          Set AUPE_NOISE_EVENTS_SOCKET to a private controller socket before launching.
+          Only authenticated handshake response and local retransmission timer events.
+          No secrets, user data or remote endpoints are included in emitted events.
+          Best-effort async telemetry; not a cryptographic proof against compromised root.
+          Not an official upstream release. Upstream pinned commit in UPSTREAM_COMMIT.
+          TXT
+          (cd output && sha256sum amneziawg-go-noise-events AUPE_NOISE_EVENT_NEWFILE.go AUPE_NOISE_EVENTS_AND_S4.patch > SHA256SUMS && sha256sum -c SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aupe-amneziawg-noise-events-amd64
+          path: output/
+          compression-level: 0
+          retention-days: 30
