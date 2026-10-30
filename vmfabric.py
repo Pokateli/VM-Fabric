@@ -118,6 +118,8 @@ def launch(args):
             cmd.extend(["--output", str(args.output.resolve())])
         if args.keys is not None:
             cmd.extend(["--keys", args.keys])
+        if args.action in ("mousemove","mousedown","mouseup","click"):
+            cmd.extend(["--dx",str(args.dx),"--dy",str(args.dy),"--button",args.button])
         return subprocess.call(cmd)
     raise ValueError(f"Unsupported operation: {args.operation}")
 
@@ -156,9 +158,12 @@ def main():
     console = sub.add_parser("console", help="Control an offline Tiny11 QEMU GUI session")
     console.add_argument("profile")
     console.add_argument("--target", type=Path)
-    console.add_argument("action", choices=("status", "screenshot", "wake", "powerdown", "sendkey"))
+    console.add_argument("action", choices=("status", "screenshot", "wake", "powerdown", "sendkey", "mousemove", "mousedown", "mouseup", "click"))
     console.add_argument("--output", type=Path)
     console.add_argument("--keys")
+    console.add_argument("--dx", type=int, default=0)
+    console.add_argument("--dy", type=int, default=0)
+    console.add_argument("--button", choices=("left","middle","right"), default="left")
     args = parser.parse_args()
     try:
         if args.operation == "list":
