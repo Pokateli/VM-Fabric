@@ -64,6 +64,10 @@ def launch(args):
         return subprocess.call(["bash", str(shell)], env=env, cwd=ROOT)
     if args.operation == "verify":
         target = (args.target or default_target(args.profile)).resolve()
+        if p.get("os") == "android":
+            helper = script_path(p, folder, "verify_script")
+            return subprocess.call([sys.executable, str(helper),
+                                    "--target", str(target)])
         if p.get("os") == "windows":
             runner = script_path(p, folder, "verify_script")
             return subprocess.call([sys.executable, str(runner), "verify",
