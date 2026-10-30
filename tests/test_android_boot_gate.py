@@ -64,6 +64,23 @@ class AndroidBootRecovery(unittest.TestCase):
                                capture_output=True,text=True)
             self.assertNotEqual(bad.returncode,0)
 
+    def test_dead_qemu_pid_does_not_wait_for_nonexistent_adb(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/"src/scripts").mkdir(parents=True)
+            (root/"src/scripts/40-bringup.sh").write_text("#!/bin/sh\nsleep 20\n")
+            (root/"build").mkdir()
+            (root/"build/qemu.pid").write_text("999999999\n")
+            (root/"build/emu.log").write_text("Android emulator failed to open overlay\n")
+            result=subprocess.run(
+                ["bash",str(GATE),str(root/"src"),str(root/"build"),str(root/"proof")],
+                capture_output=True,text=True,timeout=12)
+            self.assertEqual(result.returncode,82,result.stdout+result.stderr)
+            self.assertEqual((root/"proof/boot-gate-result.txt").read_text().strip(),
+                             "GUEST_QEMU_PROCESS_EXITED_EARLY")
+            self.assertIn("failed to open overlay",
+                          (root/"proof/qemu-exit-tail.log").read_text())
+
     def test_stopped_guest_fails_fast_instead_of_waiting_for_adb(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
