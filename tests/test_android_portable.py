@@ -87,6 +87,15 @@ class AndroidPortableKitTests(unittest.TestCase):
         self.assertNotEqual(x.returncode,0)
         self.assertIn("Wrong Android guest",x.stderr)
 
+    def test_rejects_symlink_leaking_external_host_files(self):
+        outside=self.home/"private-host-file.txt"
+        outside.write_text("DONT_INCLUDE_HOST_FILES")
+        link=self.src/"sdk/external-secret.txt"
+        link.symlink_to(outside)
+        result=self.call("pack",self.src,self.chunks)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn("symlink escapes",result.stderr)
+
     def test_detects_transport_corruption(self):
         x=self.call("pack",self.src,self.chunks)
         self.assertEqual(x.returncode,0,x.stderr)
