@@ -4,8 +4,10 @@ on:
     branches: [android-arm64-tcg-20261030]
     paths:
       - '.github/workflows/build-android-arm64.yml'
-      - 'profiles/android-arm64/**'
   workflow_dispatch:
+concurrency:
+  group: android-arm64-tcg-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
