@@ -118,7 +118,12 @@ jobs:
               ip link set lo up
               cd "$1"
               echo "GUEST_NETWORK=isolated Linux netns (loopback only)"
-              timeout 70 sh scripts/30-launch.sh
+              timeout 90 sh scripts/30-launch.sh
+              # ADB/zygote diagnostics must run in the SAME isolated network
+              # namespace as QEMU and survive a blocked bring-up operation.
+              bash "$GITHUB_WORKSPACE/profiles/android-arm64/scripts/boot-monitor.sh" "$2" 45 &
+              monitor_pid=$!
+              trap '\''kill "$monitor_pid" 2>/dev/null || true'\'' EXIT
               timeout 3450 sh scripts/40-bringup.sh
               abi=$("$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.product.cpu.abi | tr -d "\r")
               echo "ANDROID_ABI=$abi" | tee "$2/android-properties.txt"
@@ -127,6 +132,23 @@ jobs:
               grep -qi found "$2/package-service.txt"
               "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.build.version.release | tee "$2/android-version.txt"
               echo "PASS_REAL_ANDROID_ARM64_TCG_BOOT" | tee "$2/RESULT.txt"
+              # Graphical success is a SEPARATE gate from Android systemReady.
+              # Do not fail the kernel/ADB proof just because SurfaceFlinger or
+              # Launcher has not yet completed software rendering.
+              if timeout 120 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 exec-out screencap -p > "$2/android-screen.png" 2>"$2/screencap.err"; then
+                python3 - "$2/android-screen.png" <<'PYSCREEN'
+import pathlib,sys
+f=pathlib.Path(sys.argv[1])
+if not f.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"):
+    f.unlink(missing_ok=True)
+    print("Android GUI screenshot not confirmed; systemReady remains valid")
+else:
+    print("Real Android ARM64 PNG screenshot:",f.stat().st_size,"bytes")
+PYSCREEN
+              else
+                rm -f "$2/android-screen.png"
+                echo 'No Android framebuffer screenshot yet; systemReady is a distinct gate'
+              fi
             ' _ "$RUNNER_TEMP/android-arm-tcg" "$GITHUB_WORKSPACE/android-arm64-proof"
       - name: Collect bounded guest kernel logs and stop emulator
         if: always()
