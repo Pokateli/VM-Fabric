@@ -142,12 +142,13 @@ def verify_input(root):
     proof=(root/"proof/RESULT.txt").read_text()
     if "PASS_REAL_ANDROID_ARM64_TCG_BOOT" not in proof.splitlines():
         raise ValueError("Refuse to pack Android without actual ADB/package-service boot proof")
-    # A single marker is insufficient: require the independent captured ADB
-    # ABI property and a real PackageManager service response as well.
+    # The first one-shot package probe may say "not found" just BEFORE the
+    # framework completes boot. It is evidence, not a readiness gate. Require
+    # five later exact matches from the actual unchanged system_server instead.
     abi=(root/"proof/android-properties.txt").read_text().strip()
-    pkg=(root/"proof/package-service.txt").read_text()
-    if abi!="ANDROID_ABI=arm64-v8a" or not re.search(r"(?im)^\s*Service\s+package:\s+found\s*$",pkg):
-        raise ValueError("Refuse to pack Android without matching ADB ABI and package-service evidence")
+    pkg=(root/"proof/package-service.txt").read_text().strip()
+    if abi!="ANDROID_ABI=arm64-v8a" or not re.fullmatch(r"Service package: (?:not found|found)",pkg):
+        raise ValueError("Refuse to pack Android without valid ADB ABI and initial probe evidence")
     if (root/"proof/STABILITY_RESULT.txt").read_text().strip()!="PASS_STABLE_ANDROID_ARM64_PACKAGE_SERVICE":
         raise ValueError("Refuse to pack unstable Android userland")
     stability=json.loads((root/"proof/stability-report.json").read_text())
