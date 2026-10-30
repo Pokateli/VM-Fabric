@@ -81,7 +81,22 @@ rejected for this profile.
 
 **Persistence limits:** changes made by Windows are in the local
 `tiny11-session.qcow2` overlay and `OVMF_VARS-session.fd`. Do not copy those
-files while the guest is running. The image cache and session files last only
+files while the guest is running. After Windows has shut down cleanly, save
+both together using the offline VM-Fabric session tool:
+
+```bash
+python3 vmfabric.py session tiny11 save \
+  --target /mnt/data/vm-fabric/tiny11 \
+  --snapshot-dir /mnt/data/tiny11-session-backup
+# After deploying the SAME immutable base in another sandbox:
+python3 vmfabric.py session tiny11 restore \
+  --target /mnt/data/vm-fabric/tiny11 \
+  --snapshot-dir /mnt/data/tiny11-session-backup
+```
+
+The snapshot includes Windows user data and should be kept private. The
+restore tool verifies checksums and rebases the overlay's absolute backing
+path only when the original base image identity matches. The image cache and session files last only
 as long as the particular ChatGPT sandbox filesystem lasts; a new conversation
 does not automatically inherit them. The private GitHub Release preserves the
 base image, but a new isolated sandbox must still receive those image bytes
