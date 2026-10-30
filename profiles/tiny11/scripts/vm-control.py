@@ -16,26 +16,34 @@ def talk(address: Path, command: str) -> str:
     if not address.is_socket():
         raise SystemExit(f"QEMU monitor not found: {address}")
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
-        conn.settimeout(6)
+        conn.settimeout(0.8)
         try:
             conn.connect(str(address))
         except (ConnectionRefusedError, FileNotFoundError, socket.timeout) as exc:
-            raise SystemExit(f"QEMU session not active; stale/unavailable monitor: {address} ({exc})")
-        _ = conn.recv(8192)
+            raise SystemExit(f"QEMU session is not running (stale monitor): {address} ({exc})")
+        # The greeting and first '(qemu)' prompt may arrive in separate reads.
+        # Drain it fully before sending the command, or it can be mistaken for
+        # the RESPONSE prompt, producing a false empty 'info status'.
+        def until_prompt(timeout=5):
+            end_time=time.monotonic()+timeout
+            data=bytearray()
+            while time.monotonic()<end_time:
+                try:
+                    block=conn.recv(8192)
+                except socket.timeout:
+                    continue
+                if not block:break
+                data.extend(block)
+                if data.endswith(b"(qemu) "):break
+                if len(data)>256*1024:raise SystemExit("HMP reply too large")
+            return data.decode("utf-8", errors="replace")
+        until_prompt()
         conn.sendall((command + "\n").encode("ascii"))
-        end = time.monotonic() + 5
-        buf = bytearray()
-        while time.monotonic() < end:
-            try:
-                data = conn.recv(8192)
-            except socket.timeout:
-                break
-            if not data:
-                break
-            buf.extend(data)
-            if b"(qemu) " in buf[-250:]:
-                break
-        return buf.decode("utf-8", errors="replace")
+        response=until_prompt()
+        # Strip HMP keyboard echo and final prompt, retain command output.
+        if "\r\n" in response: response=response.split("\r\n",1)[1]
+        if "(qemu) " in response: response=response.rsplit("(qemu) ",1)[0]
+        return response.strip()
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
