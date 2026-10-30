@@ -23,6 +23,8 @@ FORMAT = "vmfabric-android-arm64-tcg-private-v1"
 REV = "f9eecf6c0d2fcc1e255b5a6d7322b07cbe017ba9"
 REQUIRED = (
     "proof/RESULT.txt",
+    "proof/android-properties.txt",
+    "proof/package-service.txt",
     "sdk/system-images/android-28/google_apis/arm64-v8a/system.img",
     "sdk/system-images/android-28/google_apis/arm64-v8a/vendor.img",
     "sdk/system-images/android-28/google_apis/arm64-v8a/kernel-ranchu",
@@ -128,6 +130,12 @@ def verify_input(root):
     proof=(root/"proof/RESULT.txt").read_text()
     if "PASS_REAL_ANDROID_ARM64_TCG_BOOT" not in proof.splitlines():
         raise ValueError("Refuse to pack Android without actual ADB/package-service boot proof")
+    # A single marker is insufficient: require the independent captured ADB
+    # ABI property and a real PackageManager service response as well.
+    abi=(root/"proof/android-properties.txt").read_text().strip()
+    pkg=(root/"proof/package-service.txt").read_text()
+    if abi!="ANDROID_ABI=arm64-v8a" or "found" not in pkg.lower():
+        raise ValueError("Refuse to pack Android without matching ADB ABI and package-service evidence")
     props=(root/"sdk/system-images/android-28/google_apis/arm64-v8a/source.properties").read_text()
     metadata=dict(s.strip().split("=",1) for s in props.splitlines() if "=" in s)
     if (metadata.get("AndroidVersion.ApiLevel")!="28" or
