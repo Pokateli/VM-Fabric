@@ -27,5 +27,6 @@
     "qemu_runtime_run": "41013832628",
     "evidence": "Actual first and second boot under GitHub KVM, graphical desktop confirmed in ChatGPT TCG 2026-10-30"
   },
-  "notes": "Offline evaluation OS; no commercial license implied. Use a licensed Windows image for production."
+  "notes": "Offline evaluation OS; no commercial license implied. Use a licensed Windows image for production.",
+  "session_script": "scripts/session.py"
 }
