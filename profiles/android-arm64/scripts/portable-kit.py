@@ -152,11 +152,15 @@ def verify_input(root):
         raise ValueError("Refuse to pack unstable Android userland")
     stability=json.loads((root/"proof/stability-report.json").read_text())
     obs=stability.get("observations",[])
-    if (stability.get("stable") is not True or len(obs)<5 or
-        len(obs)!=stability.get("sample_count") or
+    stable_pid=stability.get("first_system_server_pid")
+    if (stability.get("schema")!=2 or not isinstance(stable_pid,str) or
+        not stable_pid.isdecimal() or stability.get("stable") is not True or
+        len(obs)<5 or len(obs)!=stability.get("sample_count") or
         stability.get("interval_seconds",0)<15 or
         any(item.get("passed") is not True or
             item.get("abi",{}).get("stdout")!="arm64-v8a" or
+            item.get("same_server") is not True or
+            item.get("system_server_pid",{}).get("stdout")!=stable_pid or
             not re.fullmatch(r"Service package: found\s*",item.get("package",{}).get("stdout",""))
             for item in obs)):
         raise ValueError("Refuse to pack without five real stable ARM64 ADB service samples")
