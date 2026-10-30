@@ -7,9 +7,9 @@
 | Profile | OS | Status | Runtime | Image |
 | --- | --- | --- | --- | --- |
 | \`debian13\` | Debian GNU/Linux 13 (amd64) | **Ready** | ChatGPT, GitHub Actions | QEMU/TCG; internally zlib-compressed QCOW2 |
-| \`tiny11\` | Tiny11 / Windows 11 | **Experimental** | Not enabled yet | Image and provisioning under development |
+| `tiny11` | Windows 11 Enterprise Evaluation / Tiny11 | **Ready for testing** | ChatGPT TCG GUI, GitHub KVM | ZSTD-QCOW2; first and second boots verified; evaluation license expired |
 
-The Windows entry is a placeholder, **not** a claim that Tiny11 already runs successfully. New OSes are added through \`profiles/<id>/profile.json\` and their own scripts.
+The Windows profile was tested in both GitHub KVM and a ChatGPT TCG sandbox, including a real graphical Windows desktop. New OSes are added through `profiles/<id>/profile.json` and their own scripts.
 
 ## Architecture
 
@@ -18,9 +18,75 @@ The Windows entry is a placeholder, **not** a claim that Tiny11 already runs suc
 - \`profiles/debian13/scripts/\` — migrated Debian image builder, offline preseed, unpacker, QEMU startup, console executor and smoke tests.
 - \`.github/workflows/build-debian13.yml\` — builds **its own** Debian image on GitHub, tests the guest root console, publishes \`debian13-v1.2.0-fabric\` as a release in **this** repository.
 - \`.github/workflows/run-vm.yml\` — downloads the **VM-Fabric release from this same repository**, verifies it, boots the selected ready profile and returns command output and logs.
-- \`profiles/tiny11/\` — future Windows configuration, disabled until validated.
+- `profiles/tiny11/` — ready offline Windows 11 profile with SHA256-checked shard restore, immutable ZSTD base, per-session writable QCOW2 overlay, and local QEMU console commands.
 
 The runtime always uses QEMU TCG, requires no \`/dev/kvm\` or root in the ChatGPT sandbox, and runs with the guest network disabled. Only the **build on GitHub Actions** requires Docker, sudo and network access to fetch official upstream Debian images. The QEMU guest does **not** have network access.
+
+## Tiny11 / Windows 11 — dual-mode VM profile
+
+The verified Tiny11 disk was built from a modified official Windows 11 Enterprise
+Evaluation image. The base was confirmed under **GitHub Ubuntu KVM**, and its
+**actual graphical desktop** was booted inside a ChatGPT sandbox using QEMU TCG,
+with guest networking turned off. The evaluation watermark indicates an expired
+license; use a properly licensed Windows image for production use.
+
+**Provenance:** [Pokateli/Temp Actions run 40928819947](https://github.com/Pokateli/Temp/actions/runs/40928819947)
+contains 20 ready-image shards and the integrity index. Its base QCOW2 has SHA256
+`9d6b897b3ba5326b6de380b8ef48898c5c9f561b65e4b44507eb713e4300d402`.
+The VGA-enabled portable QEMU runtime was built in Temp run 41013832628.
+
+The VM-Fabric private release `tiny11-v1.0.0-fabric` is the intended durable
+backup for those files. Check that the [import workflow](https://github.com/Pokateli/VM-Fabric/actions/workflows/import-tiny11-release.yml)
+succeeded and the release contains `ready-parts.json` and all 20 shards before
+relying on it. The image is not stored in Git history.
+
+If a local unpacked base already exists, **no 8GB copy is required**. The deploy
+command creates symbolic links to that immutable cache, then makes its own session
+overlay only when booting:
+
+```bash
+python3 vmfabric.py deploy tiny11 \
+  --archive /mnt/data/tiny11-ready \
+  --target /mnt/data/vm-fabric/tiny11
+python3 vmfabric.py verify tiny11 \
+  --target /mnt/data/vm-fabric/tiny11
+python3 vmfabric.py run tiny11 --mode chat \
+  --target /mnt/data/vm-fabric/tiny11
+python3 vmfabric.py console tiny11 status \
+  --target /mnt/data/vm-fabric/tiny11
+python3 vmfabric.py console tiny11 screenshot \
+  --target /mnt/data/vm-fabric/tiny11 \
+  --output /mnt/data/tiny11-desktop.png
+```
+
+If there is no unpacked base, first download the 20 shards and index from a
+permitted private VM-Fabric release into a directory; then pass that directory
+to `deploy`. The importer also accepts the original GitHub Actions ZIP files
+named `tiny11-ready-shard-NNN.zip` plus `tiny11-ready-index.zip` **without
+extracting each ZIP to disk**. It verifies SHA256 for each shard and each
+reconstructed file.
+
+Chat mode starts the guest in a detached **local** process, uses the portable
+QEMU runtime under `QEMU_HOME` (or the usual /mnt/data path), and keeps the
+desktop in a QEMU framebuffer. Capture screenshots with `console screenshot`;
+`console wake` handles an ACPI suspend, and `console powerdown` requests a
+graceful shutdown. It does **not** expose the VM to the public Internet.
+
+On GitHub, use the separate
+[Run Tiny11 Windows desktop under GitHub KVM](https://github.com/Pokateli/VM-Fabric/actions/workflows/run-tiny11.yml)
+workflow. It imports the private Release, verifies it, and runs a bounded
+Windows second-boot probe with a disposable overlay. It does not execute Linux
+shell commands inside Windows; `--command` and `--script` are intentionally
+rejected for this profile.
+
+**Persistence limits:** changes made by Windows are in the local
+`tiny11-session.qcow2` overlay and `OVMF_VARS-session.fd`. Do not copy those
+files while the guest is running. The image cache and session files last only
+as long as the particular ChatGPT sandbox filesystem lasts; a new conversation
+does not automatically inherit them. The private GitHub Release preserves the
+base image, but a new isolated sandbox must still receive those image bytes
+at least once. To preserve **guest changes**, back up the stopped overlay and
+its UEFI variables together with the base SHA256 reference.
 
 ## 1. Building Debian on GitHub
 
