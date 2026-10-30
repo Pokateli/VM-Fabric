@@ -39,6 +39,13 @@ if [ "$MODE" = github ]; then
   exit "$?"
 fi
 LOG="${LOG:-$BUNDLE/chat-vm.log}"
+# This sandbox often has a 4GiB cgroup limit. 2560MiB guest RAM plus
+# QEMU/host buffers can trigger OOM-kill with no QEMU error in its own log.
+# Keep a 1792MiB safe default for TCG; user can opt in to larger RAM.
+RAM="${TINY11_RAM_MIB:-1792}"
+[[ "$RAM" =~ ^[0-9]+$ ]] && (( RAM >= 1024 && RAM <= 8192 )) || {
+  echo "Invalid TINY11_RAM_MIB (expected 1024..8192)" >&2; exit 2;
+}
 PID_FILE="$BUNDLE/chat-vm.pid"
 if [ -e "$PID_FILE" ]; then
   old="$(cat "$PID_FILE")"
@@ -50,12 +57,12 @@ if [ -e "$PID_FILE" ]; then
 fi
 # A child of a temporary chat shell may be killed when that shell's
 # process group is reaped. Start a completely detached OS session instead.
-pid="$(python3 - "$HERE/dual-run.py" "$BUNDLE" "$LOG" <<'PY'
+pid="$(python3 - "$HERE/dual-run.py" "$BUNDLE" "$LOG" "$RAM" <<'PY'
 import subprocess,sys
-script,bundle,log=sys.argv[1:]
+script,bundle,log,ram=sys.argv[1:]
 with open(log,'ab',buffering=0) as output:
     child=subprocess.Popen([sys.executable,script,'start','--vm-dir',bundle,
-                            '--headless','--skip-hash'],
+                            '--headless','--skip-hash','--ram',ram],
                            stdin=subprocess.DEVNULL,stdout=output,
                            stderr=subprocess.STDOUT,start_new_session=True)
 print(child.pid)
