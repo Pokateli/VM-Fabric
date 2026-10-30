@@ -100,7 +100,7 @@ jobs:
       - name: Compile, vet and publish checksummed binary
         run: |
           set -Eeuo pipefail
-          (cd upstream && go test ./device -run '^$' && go vet -tests=false ./device)
+          (cd upstream && go test ./device -run '^$' && go vet -copylocks=false ./device)
           (cd upstream && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o ../output/amneziawg-go-noise-events .)
           chmod 755 output/amneziawg-go-noise-events
           output/amneziawg-go-noise-events --version
