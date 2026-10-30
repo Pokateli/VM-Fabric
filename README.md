@@ -68,7 +68,7 @@ reconstructed file.
 
 Chat mode starts the guest in a detached **local** process, uses the portable
 QEMU runtime under `QEMU_HOME` (or the usual /mnt/data path), and keeps the
-desktop in a QEMU framebuffer. Capture screenshots with `console screenshot`;
+desktop in a QEMU framebuffer. ChatGPT's 4GiB memory-limited containers default to 1792MiB guest RAM to reduce OOM kills; override with `TINY11_RAM_MIB` if headroom permits. Capture screenshots with `console screenshot`;
 `console wake` handles an ACPI suspend, and `console powerdown` requests a
 graceful shutdown. It does **not** expose the VM to the public Internet.
 
