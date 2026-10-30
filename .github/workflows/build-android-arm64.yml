@@ -123,7 +123,7 @@ jobs:
               # namespace as QEMU and survive a blocked bring-up operation.
               bash "$GITHUB_WORKSPACE/profiles/android-arm64/scripts/boot-monitor.sh" "$2" 45 &
               monitor_pid=$!
-              trap '\''kill "$monitor_pid" 2>/dev/null || true'\'' EXIT
+              trap "kill $monitor_pid 2>/dev/null || true" EXIT
               timeout 3450 sh scripts/40-bringup.sh
               abi=$("$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.product.cpu.abi | tr -d "\r")
               echo "ANDROID_ABI=$abi" | tee "$2/android-properties.txt"
@@ -135,19 +135,12 @@ jobs:
               # Graphical success is a SEPARATE gate from Android systemReady.
               # Do not fail the kernel/ADB proof just because SurfaceFlinger or
               # Launcher has not yet completed software rendering.
-              if timeout 120 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 exec-out screencap -p > "$2/android-screen.png" 2>"$2/screencap.err"; then
-                python3 - "$2/android-screen.png" <<'PYSCREEN'
-import pathlib,sys
-f=pathlib.Path(sys.argv[1])
-if not f.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"):
-    f.unlink(missing_ok=True)
-    print("Android GUI screenshot not confirmed; systemReady remains valid")
-else:
-    print("Real Android ARM64 PNG screenshot:",f.stat().st_size,"bytes")
-PYSCREEN
+              if timeout 120 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 exec-out screencap -p > "$2/android-screen.png" 2>"$2/screencap.err" &&
+                 python3 -c "import pathlib,sys; p=pathlib.Path(sys.argv[1]); assert p.read_bytes()[:8] == bytes([137,80,78,71,13,10,26,10]); print(\"REAL_ANDROID_PNG_BYTES=\",p.stat().st_size)" "$2/android-screen.png"; then
+                echo "PASS real Android framebuffer PNG" | tee "$2/GUI_RESULT.txt"
               else
                 rm -f "$2/android-screen.png"
-                echo 'No Android framebuffer screenshot yet; systemReady is a distinct gate'
+                echo "NO_GUI_PROOF yet; systemReady is a separate gate" | tee "$2/GUI_RESULT.txt"
               fi
             ' _ "$RUNNER_TEMP/android-arm-tcg" "$GITHUB_WORKSPACE/android-arm64-proof"
       - name: Collect bounded guest kernel logs and stop emulator
