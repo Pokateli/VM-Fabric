@@ -31,6 +31,22 @@ def make_rgba_png(w,h,rgb=(0,0,0),filtertype=0):
             +chunk(b"IEND",b""))
 
 class AndroidGuiProofTests(unittest.TestCase):
+    def test_actual_launcher_evidence_requires_real_home_and_rendered_pixels(self):
+        observed=[
+          {"check":"boot_completed","exit":0,"stdout":"1"},
+          {"check":"surfaceflinger","exit":0,"stdout":"Service SurfaceFlinger: found"},
+          {"check":"display","exit":0,"stdout":"Physical size: 320x480"},
+          {"check":"launcher_resolution","exit":0,"stdout":"com.android.launcher3/.Launcher"},
+          {"check":"home_launch","exit":0,"stdout":"Starting: Intent { act=android.intent.action.MAIN }"},
+        ]
+        stats={"all_black":False,"visible_pixels":153600,"distinct_sample_colors":100}
+        self.assertEqual(m.classify_gui(observed,stats),"LAUNCHER_HOME_EVIDENCE")
+        bad=[dict(x) for x in observed]
+        bad[3]["stdout"]="com.android.settings/.FallbackHome"
+        self.assertEqual(m.classify_gui(bad,stats),"VISIBLE_FRAMEBUFFER_NOT_PROVEN_LAUNCHER")
+        empty=dict(stats,all_black=True,visible_pixels=0,distinct_sample_colors=1)
+        self.assertEqual(m.classify_gui(observed,empty),"VISIBLE_FRAMEBUFFER_NOT_PROVEN_LAUNCHER")
+
     def test_black_screen_is_not_launcher_proof(self):
         png=make_rgba_png(320,480)
         data=m.inspect_png(png)
