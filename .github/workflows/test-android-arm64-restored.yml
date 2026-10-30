@@ -1,0 +1,95 @@
+name: Android ARM64 restored private kit second boot (TCG)
+on:
+  push:
+    branches: [android-arm64-legacy-hwui-lab-20261030]
+    paths:
+      - '.github/workflows/test-android-arm64-restored.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: android-arm64-restored-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  restore-and-boot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 140
+    env:
+      ANDROID_SOURCE_RUN: '41129772918'
+      ANDROID_SOURCE_ARTIFACT: vm-fabric-android-arm64-private-kit
+    steps:
+      - uses: actions/checkout@v4
+      - name: Recover disk space and install minimal offline ARM64 VM runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends qemu-utils python3 unzip iproute2 libx11-6 libxext6 libxfixes3 libxdamage1 libxshmfence1 libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libegl1 libgles2 libgbm1 libdrm2 libopengl0
+          df -h .
+      - name: Restore the successfully verified private Android ARM64 kit from prior run
+        uses: actions/download-artifact@v4
+        with:
+          name: vm-fabric-android-arm64-private-kit
+          run-id: 41129772918
+          repository: Pokateli/VM-Fabric
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/android-private-shards
+      - name: Verify shards, restore full private Android SDK and build a COW test session
+        shell: bash
+        timeout-minutes: 45
+        run: |
+          set -Eeuo pipefail
+          python3 -m compileall -q profiles/android-arm64/scripts
+          for f in profiles/android-arm64/scripts/*.sh; do bash -n "$f"; done
+          df -h .
+          python3 - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'android-private-shards'
+          p=json.loads((root/'android-arm64-parts.json').read_text())
+          assert p['format']=='vmfabric-android-arm64-tcg-private-v1'
+          assert p['abi']=='arm64-v8a'
+          assert p['private'] is True
+          assert p['upstream_revision']=='f9eecf6c0d2fcc1e255b5a6d7322b07cbe017ba9'
+          assert 1<=len(p['parts'])<=128
+          print('Android ARM64 manifest parts:',len(p['parts']),'compressed bytes:',p['compressed_bytes'])
+          PY
+          python3 profiles/android-arm64/scripts/portable-kit.py unpack "$RUNNER_TEMP/android-private-shards" "$RUNNER_TEMP/android-arm64-restored"
+          python3 profiles/android-arm64/scripts/verify.py --target "$RUNNER_TEMP/android-arm64-restored"
+          qemu-img check -f qcow2 "$RUNNER_TEMP/android-arm64-restored/build/userdata-arm64.qcow2"
+          python3 profiles/android-arm64/scripts/prepare-restore.py --kit "$RUNNER_TEMP/android-arm64-restored" --session "$RUNNER_TEMP/android-arm64-session"
+          qemu-img info -f qcow2 "$RUNNER_TEMP/android-arm64-session/build/userdata-arm64.qcow2"
+          df -h .
+      - name: Boot the restored Android ARM64 copy in isolated QEMU TCG
+        shell: bash
+        timeout-minutes: 65
+        run: |
+          set -Eeuo pipefail
+          sudo --preserve-env=GITHUB_WORKSPACE,RUNNER_TEMP unshare --net -- bash -Eeuo pipefail -c '
+            ip link set lo up
+            exec bash "$1" "$2" "$3"
+          ' _ "$GITHUB_WORKSPACE/profiles/android-arm64/scripts/boot-restored.sh" "$RUNNER_TEMP/android-arm64-restored" "$RUNNER_TEMP/android-arm64-session"
+      - name: Keep only bounded second-boot proof and verification (no system image)
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p android-restored-proof
+          if [ -d "$RUNNER_TEMP/android-arm64-session/second-boot-proof" ]; then
+            cp -a "$RUNNER_TEMP/android-arm64-session/second-boot-proof/." android-restored-proof/ || true
+          fi
+          if [ -f "$RUNNER_TEMP/android-arm64-session/build/emu.log" ]; then
+            tail -c 8388608 "$RUNNER_TEMP/android-arm64-session/build/emu.log" > android-restored-proof/emulator-tail.log
+          fi
+          if [ -f "$RUNNER_TEMP/android-arm64-restored/proof/stability-report.json" ]; then
+            cp "$RUNNER_TEMP/android-arm64-restored/proof/stability-report.json" android-restored-proof/first-boot-stability.json
+          fi
+          df -h . > android-restored-proof/disk-after.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vm-fabric-android-arm64-restored-second-boot-proof
+          path: android-restored-proof/
+          retention-days: 14
+          if-no-files-found: warn
