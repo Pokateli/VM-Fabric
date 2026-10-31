@@ -117,18 +117,25 @@ class PartReader:
             self.remaining=meta["size"]
             self.hasher=hashlib.sha256()
         block=self.handle.read(min(self.remaining,n))
-        if not block and self.remaining:raise ValueError("Truncated shard")
+        if not block and self.remaining:
+            self.close()
+            raise ValueError("Truncated shard")
         self.remaining-=len(block)
         self.hasher.update(block)
         if self.remaining==0:
             if self.hasher.hexdigest()!=self.parts[self.i]["sha256"]:
+                self.close()
                 raise ValueError(f"SHA256 mismatch in shard {self.i}")
             if self.handle.read(1):
+                self.close()
                 raise ValueError("Unexpected bytes after declared shard end")
-            self.handle.close()
-            self.handle=None
+            self.close()
             self.i+=1
         return block
+    def close(self):
+        if self.handle is not None:
+            self.handle.close()
+            self.handle=None
 
 def excluded(path):
     # Runtime lock/cache files are not part of a reproducible Android base.
