@@ -33,7 +33,7 @@ class AndroidCrashCaptureTests(unittest.TestCase):
             m.collect(Path("/fake/adb"),"emulator-5554",proof)
             self.assertTrue((proof/"newest-tombstone.txt").is_file())
             self.assertIn("ANDROID_DIAGNOSTICS_COLLECTED","ANDROID_DIAGNOSTICS_COLLECTED")
-            self.assertEqual(len(calls),5)
+            self.assertEqual(len(calls),6)
             for args in calls:
                 self.assertNotIn("rm",args)
                 self.assertNotIn("mv",args)
