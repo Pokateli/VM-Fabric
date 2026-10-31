@@ -29,3 +29,13 @@ In a *disposable overlay* session, at the pinned zygote restart point it:
 
 ## Follow-up
 Compare with Safe Mode control and original normal-boot failure. If a successful cache-reset run repeats with normal mode, replace the experiment with a narrow first-boot cache regeneration or investigate the installed package triggering ShortcutService. Do not promote profile to ready until a normal-mode cold/warm boot and constrained 4 GiB host tests pass.
+
+## 2026-11-01 — result of the destructive-cache hypothesis and next experiment
+
+Real [cache-reset run #41250738934](https://github.com/Pokateli/VM-Fabric/actions/runs/41250738934) **failed by design with exit 96**. ADB connected and verified restored QEMU boot reached the pinned `40-bringup.sh` script. At the zygote restart, the exact directory `/data/system_ce/0/shortcut_service` did **not** exist. The cache-reset script wrote `SHORTCUT_CACHE_SOURCE_MISSING`, and refused to label an unmodified system as a repaired cache. This does not implicate a corrupt persisted shortcut cache.
+
+The Android 9 AOSP `ShortcutService.checkPackageChanges()` code uses `injectIsSafeModeEnabled()` to skip `rescanUpdatedPackagesLocked()`; the same routine loops through installed packages and calls `rescanPackageIfNeeded`. Reference: https://android.googlesource.com/platform/frameworks/base/+/android-9.0.0_r30/services/core/java/com/android/server/pm/ShortcutService.java . The previous archived native tombstone shows `ShortcutParser.createShortcutFromManifest` / ART quick resolution crash in that path. Source and evidence support narrowing to shortcut manifest scan, but not yet an exact code or binary patch.
+
+A new **read-only normal-mode** `ANDROID_SHORTCUT_TEST=observe` run is configured in [#41251519179](https://github.com/Pokateli/VM-Fabric/actions/runs/41251519179). It makes no state changes and fails closed if Safe Mode is active. On failure, before QEMU stops, `capture-crash.py` collects bounded ADB guest state, crash and main logcats, and the newest native tombstone. The current branch subsequently adds the Android system logcat buffer as well; that addition belongs to the *next* run, not to #41251519179's pinned commit. Only short matching crash lines go to the job console; the private archived SDK is not uploaded again. Tests for the collector and branch regression are checked in CI.
+
+Do not claim this second run passed until the exact same-PID five-sample, real Launcher3, and QCOW2 assertions pass. If normal mode fails, inspect native fault and AOSP API 28 `services.odex` before designing a narrowly targeted, byte-verified experimental patch. Leave original private kit immutable.
