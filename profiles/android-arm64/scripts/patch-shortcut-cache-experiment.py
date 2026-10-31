@@ -8,7 +8,7 @@ zygote and before restarting it. Keep Safe Mode off.
 
 This separates corrupted persisted shortcut state from a failure that occurs
 while rescanning installed APKs. It is NOT a production fix, it MUST NOT run
-against an immutable base, and it deliberately fails if the backup exists.
+against an immutable base, and it deliberately fails if the backup exists or no cache directory exists.
 """
 import argparse
 from pathlib import Path
@@ -16,19 +16,21 @@ from pathlib import Path
 ANCHOR = "stop zygote; start zygote"
 BACKUP = "/data/local/tmp/vmfabric-shortcut-cache-backup"
 SOURCE = "/data/system_ce/0/shortcut_service"
+SENTINEL = "/data/local/tmp/vmfabric-shortcut-cache-result.txt"
 MARKER = "# VMFABRIC_SHORTCUT_CACHE_RESET_V1"
 INJECT = f"""\
 {MARKER}
 stop zygote
-if [ -e {BACKUP} ]; then
+if [ -e {BACKUP} ] || [ -L {BACKUP} ]; then
   echo SHORTCUT_CACHE_BACKUP_COLLISION
   exit 94
 fi
 if [ -d {SOURCE} ]; then
   mv {SOURCE} {BACKUP} || exit 95
-  echo SHORTCUT_CACHE_MOVED=1
+  echo SHORTCUT_CACHE_MOVED=1 > {SENTINEL}
 else
-  echo SHORTCUT_CACHE_MOVED=0
+  echo SHORTCUT_CACHE_SOURCE_MISSING > {SENTINEL}
+  exit 96
 fi
 setprop persist.sys.safemode 0
 start zygote
