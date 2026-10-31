@@ -40,6 +40,12 @@ unshare --net -- bash -c 'ip link set lo up' || {
 # On an unbounded host an explicit size is required.
 MEM="$(python3 "$HERE/host-memory-budget.py" --requested "$RAM")"
 [[ "$MEM" =~ ^[0-9]+$ ]] || exit 3
+# Auto sizing may choose 2560 MiB on an almost-empty 4 GiB cgroup.
+# Cap automatic selection at the dedicated 2304 MiB experimental target
+# until more memory sizes are proven on an actual restricted chat host.
+if [[ "$RAM" == auto ]] && (( MEM > 2304 )); then
+  MEM=2304
+fi
 export ANDROID_GUEST_RAM_MIB="$MEM"
 export ANDROID_SHORTCUT_TEST=observe
 
