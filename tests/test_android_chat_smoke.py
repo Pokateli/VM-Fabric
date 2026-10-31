@@ -33,6 +33,8 @@ class AndroidChatSmokeTests(unittest.TestCase):
         self.assertIn("unshare --net -- bash -c 'ip link set lo up'",code)
         self.assertIn('host-memory-budget.py',code)
         self.assertIn('--requested "$RAM"',code)
+        self.assertIn('if [[ "$RAM" == auto ]] && (( MEM > 2304 )); then',code)
+        self.assertIn('MEM=2304',code)
         self.assertIn('unshare --net -- bash -Eeuo pipefail -c',code)
         self.assertLess(code.index('host-memory-budget.py'),code.index('prepare-restore.py'))
         self.assertLess(code.index("Host disallows isolated network namespace"),
