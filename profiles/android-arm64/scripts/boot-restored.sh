@@ -23,7 +23,11 @@ export MEM=4096
 mkdir -p "$SESSION/second-boot-proof"
 PROOF="$SESSION/second-boot-proof"
 SOURCE="$KIT/upstream-src"
-if [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "safemode" ]; then
+if [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "cache-reset" ]; then
+  SOURCE="$SESSION/upstream-src-cache-reset"
+  cp -a "$KIT/upstream-src" "$SOURCE"
+  python3 "$HERE/patch-shortcut-cache-experiment.py" "$SOURCE/scripts/40-bringup.sh"
+elif [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "safemode" ]; then
   # Never patch the verified SDK/source kit; modify only a per-session copy.
   SOURCE="$SESSION/upstream-src-safemode"
   cp -a "$KIT/upstream-src" "$SOURCE"
@@ -47,7 +51,11 @@ bash "$HERE/boot-monitor.sh" "$PROOF" 45 &
 watchdog_pid=$!
 trap 'kill "$watchdog_pid" 2>/dev/null || true; cleanup' EXIT
 bash "$HERE/boot-gate.sh" "$PWD" "$BUILD_DIR" "$PROOF"
-if [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "safemode" ]; then
+if [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "cache-reset" ]; then
+  actual="$(timeout 35 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.sys.safemode | tr -d '\r')"
+  printf 'GUEST_SAFE_MODE=%s\n' "$actual" | tee "$PROOF/shortcut-experiment.txt"
+  [ "$actual" != 1 ] || { echo "Cache reset ran in Safe Mode; reject ambiguous result" >&2; exit 88; }
+elif [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "safemode" ]; then
   actual="$(timeout 35 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.sys.safemode | tr -d '\r')"
   printf 'GUEST_SAFE_MODE=%s\n' "$actual" | tee "$PROOF/shortcut-experiment.txt"
   [ "$actual" = 1 ] || { echo "Safe mode was not enabled in Android WindowManagerService" >&2; exit 88; }
