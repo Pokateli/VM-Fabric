@@ -1,9 +1,5 @@
 name: Android ARM64 restored private kit second boot (TCG)
 on:
-  push:
-    branches: []
-    paths:
-      - '.github/workflows/test-android-arm64-restored.yml'
   workflow_dispatch:
 permissions:
   contents: read
