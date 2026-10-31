@@ -1,7 +1,7 @@
 name: Android ARM64 VM-Fabric profile quick validation
 on:
   push:
-    branches: [android-arm64-tcg-20261030, android-arm64-legacy-hwui-lab-20261030, android-arm64-shortcut-safemode-lab-20261030, android-arm64-shortcut-cache-lab-20261101]
+    branches: [android-arm64-tcg-20261030, android-arm64-legacy-hwui-lab-20261030, android-arm64-shortcut-safemode-lab-20261030, android-arm64-shortcut-cache-lab-20261101, android-arm64-lowram-lab-20261101]
     paths:
       - 'profiles/android-arm64/**'
       - 'vmfabric.py'
