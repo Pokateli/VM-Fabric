@@ -32,7 +32,8 @@ elif [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "safemode" ]; then
   SOURCE="$SESSION/upstream-src-safemode"
   cp -a "$KIT/upstream-src" "$SOURCE"
   python3 "$HERE/patch-safemode-experiment.py" "$SOURCE/scripts/40-bringup.sh"
-elif [ "${ANDROID_SHORTCUT_TEST:-baseline}" != "baseline" ]; then
+elif [ "${ANDROID_SHORTCUT_TEST:-baseline}" != "baseline" ] &&
+     [ "${ANDROID_SHORTCUT_TEST:-baseline}" != "observe" ]; then
   echo "Unknown Android ShortcutService experiment" >&2
   exit 2
 fi
@@ -45,13 +46,32 @@ cleanup() {
     fi
   fi
 }
-trap cleanup EXIT
+watchdog_pid=""
+finish() {
+  rc=$?
+  trap - EXIT
+  # Never lose the first failure code, and collect while ADB/QEMU are alive.
+  if (( rc != 0 )) && [[ -s "$BUILD_DIR/qemu.pid" ]]; then
+    timeout --signal=TERM --kill-after=10s 110s python3 "$HERE/capture-crash.py" \
+      --sdk-root "$SDK_ROOT" --proof-dir "$PROOF" || true
+  fi
+  if [[ -n "$watchdog_pid" ]]; then
+    kill "$watchdog_pid" 2>/dev/null || true
+  fi
+  cleanup
+  exit "$rc"
+}
+trap finish EXIT
 timeout 90 sh scripts/30-launch.sh
 bash "$HERE/boot-monitor.sh" "$PROOF" 45 &
 watchdog_pid=$!
-trap 'kill "$watchdog_pid" 2>/dev/null || true; cleanup' EXIT
 bash "$HERE/boot-gate.sh" "$PWD" "$BUILD_DIR" "$PROOF"
-if [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "cache-reset" ]; then
+if [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "observe" ]; then
+  # Pure normal-mode control: read-only evidence, no guest patch and no Safe Mode.
+  actual="$(timeout 35 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.sys.safemode | tr -d '\r')"
+  printf 'GUEST_SAFE_MODE=%s\n' "$actual" | tee "$PROOF/shortcut-experiment.txt"
+  [ "$actual" != 1 ] || { echo "Observe control must run outside Safe Mode" >&2; exit 88; }
+elif [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "cache-reset" ]; then
   actual="$(timeout 35 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.sys.safemode | tr -d '\r')"
   printf 'GUEST_SAFE_MODE=%s\n' "$actual" | tee "$PROOF/shortcut-experiment.txt"
   [ "$actual" != 1 ] || { echo "Cache reset ran in Safe Mode; reject ambiguous result" >&2; exit 88; }
