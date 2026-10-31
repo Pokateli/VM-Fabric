@@ -1,7 +1,7 @@
 name: Android ARM64 restored private kit second boot (TCG)
 on:
   push:
-    branches: [android-arm64-shortcut-cache-lab-20261101]
+    branches: [android-arm64-lowram-lab-20261101]
     paths:
       - '.github/workflows/test-android-arm64-restored.yml'
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
       ANDROID_SOURCE_RUN: '41129772918'
       ANDROID_SOURCE_ARTIFACT: vm-fabric-android-arm64-private-kit
       ANDROID_SHORTCUT_TEST: observe
-      ANDROID_GUEST_RAM_MIB: '4096'
+      ANDROID_GUEST_RAM_MIB: '2304'
     steps:
       - uses: actions/checkout@v4
       - name: Recover disk space and install minimal offline ARM64 VM runtime
