@@ -19,11 +19,7 @@ export SDK_ROOT="$KIT/sdk"
 export BUILD_DIR="$SESSION/build"
 export ANDROID_I_WANT_MY_TCG=yes
 export CORES=1
-export MEM="${ANDROID_GUEST_RAM_MIB:-4096}"
-[[ "$MEM" =~ ^[0-9]+$ ]] && (( MEM >= 1536 && MEM <= 4096 )) || {
-  echo "Invalid guest RAM; allowed 1536..4096 MiB" >&2
-  exit 2
-}
+export MEM="$(python3 "$HERE/host-memory-budget.py" --requested "${ANDROID_GUEST_RAM_MIB:-4096}")"
 mkdir -p "$SESSION/second-boot-proof"
 PROOF="$SESSION/second-boot-proof"
 SOURCE="$KIT/upstream-src"
