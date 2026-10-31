@@ -1,5 +1,9 @@
 name: Android ARM64 restored private kit second boot (TCG)
 on:
+  push:
+    branches: [android-arm64-shortcut-cache-lab-20261101]
+    paths:
+      - '.github/workflows/test-android-arm64-restored.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,8 +26,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends qemu-utils python3 unzip iproute2 libx11-6 libxext6 libxfixes3 libxdamage1 libxshmfence1 libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libegl1 libgles2 libgbm1 libdrm2 libopengl0
+          timeout --signal=TERM --kill-after=15s 180s sudo apt-get update -qq
+          timeout --signal=TERM --kill-after=15s 420s sudo apt-get install -y -qq --no-install-recommends qemu-utils python3 unzip iproute2 libx11-6 libxext6 libxfixes3 libxdamage1 libxshmfence1 libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libegl1 libgles2 libgbm1 libdrm2 libopengl0
           df -h .
       - name: Restore verified private Android ARM64 kit from GitHub Release
         shell: bash
