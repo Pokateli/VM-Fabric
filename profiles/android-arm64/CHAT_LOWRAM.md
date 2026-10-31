@@ -37,11 +37,15 @@ sudo bash profiles/android-arm64/scripts/run-chat-smoke.sh \
 ```
 
 This launcher refuses missing local tools, missing kit, existing session,
-non-root execution or an unavailable network namespace. It derives a
-cgroup-safe RAM budget, checks the restored private kit, prepares a separate
-writable QCOW2 overlay and performs an isolated, no-network normal-mode
-smoke test. Its QEMU/ADB session is shut down after evidence collection,
-not left running as an interactive desktop.
+non-root execution or an unavailable network namespace. It first tries a
+privileged host network namespace; if CAP_SYS_ADMIN is missing, it tries
+`unshare --user --map-root-user --net` with loopback only. Both methods
+fail closed rather than running with unrestricted host networking. It derives a
+cgroup-safe RAM budget and caps automatic guest RAM at **2304 MiB**,
+checks the restored private kit, prepares a separate writable QCOW2 overlay
+and performs an isolated, no-network normal-mode smoke test. Its QEMU/ADB
+session is shut down after evidence collection, not left running as an
+interactive desktop.
 
 **No paid or remote storage:** the script does not download Android, use
 third-party services or upload images or logs. The source SDK/emulator is
@@ -49,8 +53,10 @@ Google proprietary material under its applicable license and must remain
 private. The guest uses experimental SELinux/HAL changes; do not use
 personal logins or sensitive data.
 
-The present ChatGPT sandbox may lack `qemu-img`, root network namespace
-permissions and the private Android SDK itself. These missing prerequisites
-prevent a live local boot until supplied; running the static tests is not a
-substitute for a QEMU boot. In particular, never claim the ChatGPT-local
-desktop is operational merely because GitHub's QEMU TCG test passes.
+**Observed inside the present ChatGPT sandbox:** `unshare --net` fails with
+`Operation not permitted`, but `unshare --user --map-root-user --net`
+succeeds and `ip link set lo up` succeeds inside it. The new launcher
+supports this working fallback. The sandbox currently still lacks
+`qemu-img` and the private Google Android SDK kit. Those prerequisites
+prevent an actual local ARM64 guest boot today; static tests and GitHub's
+QEMU TCG successes are not substitutes for real ChatGPT-local proof.
