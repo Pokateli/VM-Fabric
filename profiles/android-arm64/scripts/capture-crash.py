@@ -35,6 +35,7 @@ def collect(adb,serial,proof):
             "/data/system/shortcut_service.xml 2>&1 || true"],
         "logcat-crash": ["shell","logcat","-b","crash","-d","-t","600"],
         "logcat-main": ["shell","logcat","-b","main","-d","-t","1600"],
+        "logcat-system": ["shell","logcat","-b","system","-d","-t","1200"],
         "tombstone-names": ["shell","ls","-t","/data/tombstones"],
     }
     for label,cmd in commands.items():
@@ -53,7 +54,7 @@ def collect(adb,serial,proof):
                     (proof/"newest-tombstone.txt").write_bytes(r["stdout"])
                 break
     # Key failure lines in the always-retained Actions console log (no zip upload).
-    for filename in ("logcat-crash.txt","logcat-main.txt","newest-tombstone.txt"):
+    for filename in ("logcat-crash.txt","logcat-main.txt","logcat-system.txt","newest-tombstone.txt"):
         f=proof/filename
         if not f.exists():continue
         selected=[line[:450] for line in f.read_text(errors="replace").splitlines()
