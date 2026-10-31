@@ -1,3 +1,17 @@
+## 2026-11-01 — Normal-mode Android ARM64 restored second boot PASSED (4096 MiB)
+
+[Live run #41251519179](https://github.com/Pokateli/VM-Fabric/actions/runs/41251519179) ended in **success**:
+- QEMU TCG with a real `arm64-v8a` Android 9 API 28 guest; 1 vCPU, **4096 MiB** guest RAM.
+- `ANDROID_SHORTCUT_TEST=observe` (read-only control); `GUEST_SAFE_MODE=` (not `1`), no cache reset and no forced Safe Mode.
+- Five consecutive independent PackageManager/`system_server` same-PID checks passed: `ANDROID_STABILITY_SAMPLE=1/5 ... 5/5 PASS`.
+- Guest `sys.boot_completed=1`, `LAUNCHER_HOME_EVIDENCE`, controlled shutdown, QCOW2 check and immutable source SHA-256 all passed.
+- The prior run #41132811947 had failed on sample 5 with a `ShortcutParser`/ART SIGSEGV. Therefore **the crash is intermittent and has not been permanently fixed**. Safe Mode is not required for every successful boot, so do not apply a global Safe Mode workaround.
+- No new Actions artifact was uploaded in this successful run.
+
+**Next independent experiment:** [run #41252841437](https://github.com/Pokateli/VM-Fabric/actions/runs/41252841437) on `android-arm64-lowram-lab-20261101` tests the same read-only mode with **2304 MiB** guest RAM. Do not update `minimum_guest_ram_mib` or promote `status=ready` until actual ARM64, package-service, Launcher3, QCOW2 and immutable-base gates pass at that size. A finite 4 GiB ChatGPT cgroup is not the same as GitHub's unbounded RAM environment; testing 2304 MiB guest on GitHub is necessary but not sufficient for a ChatGPT-local host.
+
+---
+
 ## 2026-10-30 — verified clean-room restore, second boot crashes in ShortcutService
 
 **First real private Android ARM64 1.49GB kit**: [#41129772918](https://github.com/Pokateli/VM-Fabric/actions/runs/41129772918), artifact id 13012994299, fully uploaded after a genuine Launcher3 screenshot, five stable Android PackageManager/PID observations and clean `qemu-img check`. The kit is not public.
