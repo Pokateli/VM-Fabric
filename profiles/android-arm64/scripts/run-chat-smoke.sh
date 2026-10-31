@@ -31,11 +31,19 @@ SESSION="$(realpath -m -- "$SESSION")"
 [[ ! -e "$SESSION" && ! -L "$SESSION" ]] || {
   echo "Session already exists: refuse overwrite or resume" >&2; exit 3;
 }
-# Fail before creating overlays if this sandbox denies network namespaces.
-unshare --net -- bash -c 'ip link set lo up' || {
-  echo "Host disallows isolated network namespace. Guest not launched." >&2
+# Isolate host networking without assuming CAP_SYS_ADMIN. A 4GiB ChatGPT
+# sandbox can reject regular unshare --net but allow unprivileged user+net
+# namespaces, with loopback only. Both paths fail closed on unsupported hosts.
+if unshare --net -- bash -c 'ip link set lo up' >/dev/null 2>&1; then
+  NETNS=(unshare --net --)
+  echo "ANDROID_NETNS=privileged"
+elif unshare --user --map-root-user --net -- bash -c 'ip link set lo up' >/dev/null 2>&1; then
+  NETNS=(unshare --user --map-root-user --net --)
+  echo "ANDROID_NETNS=user-map-root"
+else
+  echo "Host disallows isolated network namespaces; guest not launched." >&2
   exit 3
-}
+fi
 # On ChatGPT's finite 4 GiB cgroup choose a conservative guest size automatically.
 # On an unbounded host an explicit size is required.
 MEM="$(python3 "$HERE/host-memory-budget.py" --requested "$RAM")"
@@ -56,7 +64,7 @@ echo "ANDROID_CHAT_EXPERIMENT=offline ram_mib=$MEM"
 echo "IMMUTABLE_KIT=$KIT"
 echo "THROWAWAY_SESSION=$SESSION"
 # ADB stays on loopback in a dedicated host network namespace with no internet.
-unshare --net -- bash -Eeuo pipefail -c '
+"${NETNS[@]}" bash -Eeuo pipefail -c '
   ip link set lo up
   exec bash "$1" "$2" "$3"
 ' _ "$HERE/boot-restored.sh" "$KIT" "$SESSION"
