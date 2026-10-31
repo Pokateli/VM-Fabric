@@ -25,14 +25,25 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-utils python3 unzip iproute2 libx11-6 libxext6 libxfixes3 libxdamage1 libxshmfence1 libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libegl1 libgles2 libgbm1 libdrm2 libopengl0
           df -h .
-      - name: Restore the successfully verified private Android ARM64 kit from prior run
-        uses: actions/download-artifact@v4
-        with:
-          name: vm-fabric-android-arm64-private-kit
-          run-id: 41129772918
-          repository: Pokateli/VM-Fabric
-          github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/android-private-shards
+      - name: Restore verified private Android ARM64 kit from GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          RELEASE_TAG='actions-artifacts-archive-2026-10'
+          ARCHIVE='run-41129772918-artifact-13012994299-vm-fabric-android-arm64-private-kit.zip'
+          mkdir -p "$RUNNER_TEMP/android-private-shards"
+          gh release download "$RELEASE_TAG" --repo Pokateli/VM-Fabric \
+            --pattern "$ARCHIVE" --dir "$RUNNER_TEMP"
+          gh release download "$RELEASE_TAG" --repo Pokateli/VM-Fabric \
+            --pattern "$ARCHIVE.sha256" --dir "$RUNNER_TEMP"
+          ( cd "$RUNNER_TEMP" && sha256sum -c "$ARCHIVE.sha256" )
+          # Archive contains the original Actions artifact ZIP contents (the shard manifest and parts).
+          unzip -q "$RUNNER_TEMP/$ARCHIVE" -d "$RUNNER_TEMP/android-private-shards"
+          test -s "$RUNNER_TEMP/android-private-shards/android-arm64-parts.json"
+          rm -f "$RUNNER_TEMP/$ARCHIVE" "$RUNNER_TEMP/$ARCHIVE.sha256"
+          echo "PASS_ANDROID_PRIVATE_RELEASE_SHA256_AND_ZIP_RESTORE"
       - name: Verify shards, restore full private Android SDK and build a COW test session
         shell: bash
         timeout-minutes: 45
@@ -83,10 +94,28 @@ jobs:
             cp "$RUNNER_TEMP/android-arm64-restored/proof/stability-report.json" android-restored-proof/first-boot-stability.json
           fi
           df -h . > android-restored-proof/disk-after.txt
-      - uses: actions/upload-artifact@v4
+      - name: Report bounded result in Actions logs only (no stored artifact)
         if: always()
-        with:
-          name: vm-fabric-android-arm64-restored-second-boot-proof
-          path: android-restored-proof/
-          retention-days: 14
-          if-no-files-found: warn
+        shell: bash
+        run: |
+          set +e
+          PROOF="$RUNNER_TEMP/android-arm64-session/second-boot-proof"
+          for name in boot-gate-result.txt shortcut-experiment.txt STABILITY_RESULT.txt GUI_RESULT.txt RESULT.txt; do
+            if [ -f "$PROOF/$name" ]; then
+              printf '=== %s ===\\n' "$name"
+              tail -c 3072 "$PROOF/$name"
+            fi
+          done
+          if [ -f "$PROOF/stability-report.json" ]; then
+            python3 - "$PROOF/stability-report.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          print('STABILITY=',d.get('stable'),'PID=',d.get('first_system_server_pid'))
+          print('SAMPLES=',[(s['sample'],s['passed'],s['system_server_pid']['stdout'])
+                            for s in d.get('observations',[])])
+          PY
+          fi
+          if [ -f "$RUNNER_TEMP/android-arm64-session/build/emu.log" ]; then
+            tail -n 40 "$RUNNER_TEMP/android-arm64-session/build/emu.log"
+          fi
+          echo "No Actions artifact uploaded: results remain in bounded job logs."
