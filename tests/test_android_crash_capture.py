@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Pure offline tests: crash diagnostics cannot change the guest or overrun output."""
 import importlib.util
+import contextlib
+import io
 from pathlib import Path
 import subprocess
 import tempfile
@@ -27,12 +29,19 @@ class AndroidCrashCaptureTests(unittest.TestCase):
                 return {"rc":0,"stdout":b"../bad\ntombstone_03\n","stderr":b""}
             if args[-1]=="/data/tombstones/tombstone_03":
                 return {"rc":0,"stdout":b"Fatal signal 11 SIGSEGV system_server ShortcutParser\n","stderr":b""}
-            return {"rc":0,"stdout":b"system_server ShortcutService SIGSEGV\n","stderr":b""}
+            return {"rc":0,"stdout":b"system_server ShortcutService SIGSEGV SECRET=example_canary_123\n","stderr":b""}
         with tempfile.TemporaryDirectory() as d,patch.object(m,"adb_run",side_effect=fake):
             proof=Path(d)
-            m.collect(Path("/fake/adb"),"emulator-5554",proof)
+            stream=io.StringIO()
+            with contextlib.redirect_stdout(stream):
+                m.collect(Path("/fake/adb"),"emulator-5554",proof)
+            output=stream.getvalue()
             self.assertTrue((proof/"newest-tombstone.txt").is_file())
-            self.assertIn("ANDROID_DIAGNOSTICS_COLLECTED","ANDROID_DIAGNOSTICS_COLLECTED")
+            self.assertTrue((proof/"crash-analysis.json").is_file())
+            self.assertIn("ANDROID_DIAGNOSTICS_COLLECTED",output)
+            self.assertIn("ANDROID_CRASH_CLASS=",output)
+            self.assertNotIn("SECRET=example_canary_123",output)
+            self.assertNotIn("ANDROID_CRASH_LINE=",output)
             self.assertEqual(len(calls),6)
             for args in calls:
                 self.assertNotIn("rm",args)
