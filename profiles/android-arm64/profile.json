@@ -4,12 +4,12 @@
   "architecture": "aarch64",
   "host_architecture": "x86_64",
   "os": "android",
-  "version": "9 (API 28) - first boot baseline",
+  "version": "9 (API 28) - experimental normal-mode repeated image boot",
   "abi": "arm64-v8a",
   "status": "experimental",
   "driver": "google-emulator-qemu-aarch64-tcg",
   "runtime": [],
-  "guest_network": "isolated-pending-test",
+  "guest_network": "isolated host network namespace (loopback only)",
   "acceleration": "tcg",
   "minimum_guest_ram_mib": 4096,
   "bootstrap_script": "scripts/bootstrap.sh",
@@ -28,6 +28,6 @@
     "android_ready": "service check package -> found"
   },
   "risk": "Experimental only. Upstream toolkit patches Android/emulator binaries, disables some HALs and SELinux enforcement; do not use with sensitive user accounts or secrets.",
-  "description": "Not an Android-x86 image, not upstream QEMU virt GSI, and no successful local boot is claimed yet.",
+  "description": "Android ARM64 TCG: real second boot in normal mode passed at 4096 MiB (run 41251519179), 5/5 unchanged system_server PID and Launcher3 evidence. Repeatability and 2304 MiB guest RAM/4 GiB chat host remain unproven; profile deliberately experimental.",
   "console_script": "scripts/console.py"
 }
