@@ -12,10 +12,6 @@ import re
 import subprocess
 
 ALLOW_TOMBSTONE=re.compile(r"^tombstone_[0-9]{2}(?:\.pb)?$")
-HIGHLIGHT=re.compile(
-    r"shortcut|system_server|AndroidRuntime|FATAL|SIGSEGV|artQuick|libart|"
-    r"Fatal signal|tombstone|rescan|zygote",re.I
-)
 def adb_run(adb,serial,args,timeout=22,limit=512*1024):
     try:
         r=subprocess.run([str(adb),"-s",serial,*args],capture_output=True,timeout=timeout)
@@ -53,15 +49,21 @@ def collect(adb,serial,proof):
                 if r["stdout"]:
                     (proof/"newest-tombstone.txt").write_bytes(r["stdout"])
                 break
-    # Key failure lines in the always-retained Actions console log (no zip upload).
-    for filename in ("logcat-crash.txt","logcat-main.txt","logcat-system.txt","newest-tombstone.txt"):
-        f=proof/filename
-        if not f.exists():continue
-        selected=[line[:450] for line in f.read_text(errors="replace").splitlines()
-                  if HIGHLIGHT.search(line)]
-        print(f"ANDROID_CRASH_DIAGNOSTIC={filename} matched={len(selected)}",flush=True)
-        for line in selected[-35:]:
-            print("ANDROID_CRASH_LINE="+line,flush=True)
+    # Keep raw crash logs private in the ephemeral runner. Print only normalized
+    # crash fingerprints to Actions logs: logcat can include application secrets.
+    import sys
+    try:
+        analysis=subprocess.run(
+            [sys.executable,str(Path(__file__).with_name("analyze-crash.py")),
+             "--proof-dir",str(proof)],
+            capture_output=True,text=True,timeout=15,
+        )
+        if analysis.returncode==0:
+            print(analysis.stdout.strip(),flush=True)
+        else:
+            print("ANDROID_CRASH_ANALYSIS_UNAVAILABLE",flush=True)
+    except (OSError,subprocess.TimeoutExpired):
+        print("ANDROID_CRASH_ANALYSIS_UNAVAILABLE",flush=True)
     (proof/"crash-collection.json").write_text(json.dumps(
         {"schema":1,"results":results},indent=2)+"\n")
     print("ANDROID_DIAGNOSTICS_COLLECTED",flush=True)
