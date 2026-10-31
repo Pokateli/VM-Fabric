@@ -44,7 +44,7 @@ class ShortcutCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base=Path(tmp)
             p=base/"40-bringup.sh"
-            p.write_text("stop zygote; start zygote\\n")
+            p.write_text("stop zygote; start zygote\n")
             proc=subprocess.run([sys.executable,str(PATCH),str(p)],capture_output=True,text=True)
             self.assertEqual(proc.returncode,0,proc.stderr)
             source=base/"data/system_ce/0/shortcut_service"
@@ -60,7 +60,7 @@ class ShortcutCacheTests(unittest.TestCase):
             ).replace(
                 "/data/local/tmp/vmfabric-shortcut-cache-result.txt",str(marker)
             )
-            command="stop(){ :; }\\nstart(){ :; }\\nsetprop(){ :; }\\n"+code
+            command="stop(){ :; }\nstart(){ :; }\nsetprop(){ :; }\n"+code
             r=subprocess.run(["sh","-c",command],capture_output=True,text=True)
             self.assertEqual(r.returncode,0,r.stderr)
             self.assertEqual(marker.read_text().strip(),"SHORTCUT_CACHE_MOVED=1")
