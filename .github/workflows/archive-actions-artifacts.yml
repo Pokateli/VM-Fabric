@@ -200,7 +200,7 @@ jobs:
           set -Eeuo pipefail
 
           MONTH="$(date -u +%Y-%m)"
-          TAG="actions-logs-archive-\${MONTH}"
+          TAG="actions-logs-archive-${MONTH}"
           MAX_ASSET_BYTES=2147483647
           MAX_BATCH_BYTES=1700000000
           WORK_DIR="$RUNNER_TEMP/actions-log-archive"
@@ -220,17 +220,17 @@ jobs:
           if ! gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
             gh release create "$TAG" --repo "$GH_REPO" \
               --title "Actions logs archive $MONTH" \
-              --notes "Archived GitHub Actions workflow log ZIPs, grouped by run and attempt. Original logs are deleted only after the Release bundle passes GitHub's remote SHA256 verification."
+              --notes "Archived GitHub Actions workflow log ZIPs, grouped by run and attempt. Original GitHub Actions logs are retained until separately authorized for deletion."
           fi
 
           BATCH_COUNT=0
           BATCH_BYTES=0
+          BATCH_ATTEMPTS=0
           BATCH_FIRST=""
           BATCH_LAST=""
           ARCHIVED_RUNS=0
           ARCHIVED_ATTEMPTS=0
           SKIPPED_RUNS=0
-          DELETED_RUNS=0
           declare -a BATCH_RUN_IDS=()
           : > "$BATCH_DIR/manifest.tsv"
 
@@ -239,69 +239,61 @@ jobs:
               return 0
             fi
 
-            local bundle_name="logs-\${MONTH}-runs-\${BATCH_FIRST}-\${BATCH_LAST}.zip"
+            local bundle_name="logs-${MONTH}-runs-${BATCH_FIRST}-${BATCH_LAST}.zip"
             local bundle="$WORK_DIR/$bundle_name"
-            local checksum="$WORK_DIR/\${bundle_name}.sha256"
-            local bundle_size hash remote_meta remote_size remote_digest checksum_meta
+            local checksum="$WORK_DIR/${bundle_name}.sha256"
+            local bundle_size hash remote_json remote_meta remote_size remote_digest checksum_meta
 
             (cd "$WORK_DIR" && zip -qr "$bundle" batch)
             bundle_size="$(stat -c '%s' "$bundle")"
             if (( bundle_size >= MAX_ASSET_BYTES )); then
-              echo "Bundle $bundle_name exceeds GitHub's 2 GiB asset limit; source logs are retained."
+              echo "Bundle $bundle_name exceeds GitHub's 2 GiB asset limit; this batch is not published."
               return 1
             fi
 
             hash="$(sha256sum "$bundle" | awk '{print $1}')"
             printf '%s  %s\n' "$hash" "$bundle_name" > "$checksum"
-
             gh release upload "$TAG" "$bundle" "$checksum" --repo "$GH_REPO" --clobber
 
-            remote_meta="$(gh api "repos/$GH_REPO/releases/tags/$TAG" \
-              --jq --arg name "$bundle_name" \
-              '.assets[] | select(.name == $name) | [.size, .digest] | @tsv')"
+            remote_json="$(gh api "repos/$GH_REPO/releases/tags/$TAG")"
+            remote_meta="$(jq -r --arg name "$bundle_name" \
+              '.assets[] | select(.name == $name) | [.size, .digest] | @tsv' <<< "$remote_json")"
             IFS=$'\t' read -r remote_size remote_digest <<< "$remote_meta"
-
-            checksum_meta="$(gh api "repos/$GH_REPO/releases/tags/$TAG" \
-              --jq --arg name "\${bundle_name}.sha256" \
-              '.assets[] | select(.name == $name) | [.size, .digest] | @tsv')"
+            checksum_meta="$(jq -r --arg name "${bundle_name}.sha256" \
+              '.assets[] | select(.name == $name) | [.size, .digest] | @tsv' <<< "$remote_json")"
 
             if [[ "$remote_size" != "$bundle_size" ||
                   "$remote_digest" != "sha256:$hash" ||
                   -z "$checksum_meta" ]]; then
-              echo "Remote SHA256/size verification failed for $bundle_name. All source logs in this batch are retained."
+              echo "Remote SHA256/size verification failed for $bundle_name."
               return 1
             fi
 
-            echo "Release bundle verified: $bundle_name ($bundle_size bytes, SHA256 $hash)."
-
-            for run_id in "\${BATCH_RUN_IDS[@]}"; do
-              gh api --method DELETE "repos/$GH_REPO/actions/runs/$run_id/logs" >/dev/null
-              DELETED_RUNS=$((DELETED_RUNS + 1))
-              echo "Deleted original logs for workflow run $run_id after verified archive."
-            done
-
+            echo "Release bundle SHA256-verified: $bundle_name ($bundle_size bytes, $hash)."
             ARCHIVED_RUNS=$((ARCHIVED_RUNS + BATCH_COUNT))
+            ARCHIVED_ATTEMPTS=$((ARCHIVED_ATTEMPTS + BATCH_ATTEMPTS))
             rm -f "$bundle" "$checksum"
             rm -rf "$BATCH_DIR"
             mkdir -p "$BATCH_DIR"
             : > "$BATCH_DIR/manifest.tsv"
             BATCH_COUNT=0
             BATCH_BYTES=0
+            BATCH_ATTEMPTS=0
             BATCH_FIRST=""
             BATCH_LAST=""
             BATCH_RUN_IDS=()
           }
 
           while IFS=$'\t' read -r RUN_ID RUN_ATTEMPT CREATED_AT; do
-            [[ -n "\${RUN_ID:-}" ]] || continue
+            [[ -n "${RUN_ID:-}" ]] || continue
 
-            # The current workflow is still running, so its logs are archived on a later manual run.
+            # The current workflow is still running; its logs will be included on a later manual run.
             if [[ "$RUN_ID" == "$GITHUB_RUN_ID" ]]; then
               continue
             fi
 
             if ! [[ "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]; then
-              echo "Invalid attempt number for run $RUN_ID; keeping its logs."
+              echo "Invalid attempt number for run $RUN_ID; skipping it."
               SKIPPED_RUNS=$((SKIPPED_RUNS + 1))
               continue
             fi
@@ -324,23 +316,21 @@ jobs:
                 "https://api.github.com/repos/$GH_REPO/actions/runs/$RUN_ID/attempts/$ATTEMPT/logs")"
 
               if [[ "$HTTP_STATUS" == "404" || "$HTTP_STATUS" == "410" ]]; then
-                echo "No downloadable logs for run $RUN_ID attempt $ATTEMPT; retaining the run's logs."
+                echo "No downloadable logs for run $RUN_ID attempt $ATTEMPT; skipping this run."
                 RUN_OK=0
                 break
               fi
 
               if [[ "$HTTP_STATUS" != "302" && "$HTTP_STATUS" != "301" ]]; then
-                echo "Unexpected HTTP $HTTP_STATUS for run $RUN_ID attempt $ATTEMPT; retaining the run's logs."
-                RUN_OK=0
-                break
+                echo "Unexpected HTTP $HTTP_STATUS for run $RUN_ID attempt $ATTEMPT."
+                exit 1
               fi
 
               DOWNLOAD_URL="$(awk 'tolower($1) == "location:" { sub(/^[^:]*:[[:space:]]*/, ""); gsub(/\r/, ""); print }' "$HEADERS" | tail -n 1)"
               rm -f "$HEADERS"
               if [[ -z "$DOWNLOAD_URL" ]]; then
-                echo "Missing signed URL for run $RUN_ID attempt $ATTEMPT; retaining the run's logs."
-                RUN_OK=0
-                break
+                echo "Missing signed URL for run $RUN_ID attempt $ATTEMPT."
+                exit 1
               fi
 
               curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
@@ -348,19 +338,19 @@ jobs:
 
               ATTEMPT_SIZE="$(stat -c '%s' "$DOWNLOAD")"
               if (( ATTEMPT_SIZE == 0 || ATTEMPT_SIZE >= MAX_ASSET_BYTES )); then
-                echo "Invalid or oversized log archive for run $RUN_ID attempt $ATTEMPT; retaining source logs."
+                echo "Invalid or oversized log archive for run $RUN_ID attempt $ATTEMPT; skipping this run."
                 RUN_OK=0
                 break
               fi
 
               if ! unzip -tq "$DOWNLOAD" >/dev/null; then
-                echo "Log ZIP validation failed for run $RUN_ID attempt $ATTEMPT; retaining source logs."
+                echo "Log ZIP validation failed for run $RUN_ID attempt $ATTEMPT; skipping this run."
                 RUN_OK=0
                 break
               fi
 
               ATTEMPT_HASH="$(sha256sum "$DOWNLOAD" | awk '{print $1}')"
-              ATTEMPT_NAME="run-\${RUN_ID}-attempt-\${ATTEMPT}-logs.zip"
+              ATTEMPT_NAME="run-${RUN_ID}-attempt-${ATTEMPT}-logs.zip"
               mv "$DOWNLOAD" "$RUN_TMP/$ATTEMPT_NAME"
               printf '%s\t%s\t%s\t%s\t%s\n' \
                 "$RUN_ID" "$ATTEMPT" "$CREATED_AT" "$ATTEMPT_NAME" "$ATTEMPT_HASH" \
@@ -377,7 +367,7 @@ jobs:
             fi
 
             if (( RUN_BYTES > MAX_BATCH_BYTES )); then
-              echo "Run $RUN_ID logs exceed the safe bundle size; retaining source logs."
+              echo "Run $RUN_ID logs exceed the safe bundle size; skipping this run."
               rm -rf "$RUN_TMP"
               SKIPPED_RUNS=$((SKIPPED_RUNS + 1))
               continue
@@ -400,7 +390,7 @@ jobs:
             BATCH_RUN_IDS+=("$RUN_ID")
             BATCH_COUNT=$((BATCH_COUNT + 1))
             BATCH_BYTES=$((BATCH_BYTES + RUN_BYTES))
-            ARCHIVED_ATTEMPTS=$((ARCHIVED_ATTEMPTS + RUN_ATTEMPT_COUNT))
+            BATCH_ATTEMPTS=$((BATCH_ATTEMPTS + RUN_ATTEMPT_COUNT))
           done <<< "$RUN_ROWS"
 
           flush_batch
@@ -411,8 +401,8 @@ jobs:
             echo "- Release: $TAG"
             echo "- Archived workflow runs: $ARCHIVED_RUNS"
             echo "- Archived attempts: $ARCHIVED_ATTEMPTS"
-            echo "- Original run logs deleted after verification: $DELETED_RUNS"
-            echo "- Skipped / retained runs: $SKIPPED_RUNS"
+            echo "- Original GitHub logs: retained"
+            echo "- Skipped / unavailable runs: $SKIPPED_RUNS"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          echo "Completed: archived_runs=$ARCHIVED_RUNS attempts=$ARCHIVED_ATTEMPTS deleted_runs=$DELETED_RUNS skipped_runs=$SKIPPED_RUNS release=$TAG"
+          echo "Completed: archived_runs=$ARCHIVED_RUNS attempts=$ARCHIVED_ATTEMPTS skipped_runs=$SKIPPED_RUNS release=$TAG"
