@@ -19,7 +19,11 @@ export SDK_ROOT="$KIT/sdk"
 export BUILD_DIR="$SESSION/build"
 export ANDROID_I_WANT_MY_TCG=yes
 export CORES=1
-export MEM=4096
+export MEM="${ANDROID_GUEST_RAM_MIB:-4096}"
+[[ "$MEM" =~ ^[0-9]+$ ]] && (( MEM >= 1536 && MEM <= 4096 )) || {
+  echo "Invalid guest RAM; allowed 1536..4096 MiB" >&2
+  exit 2
+}
 mkdir -p "$SESSION/second-boot-proof"
 PROOF="$SESSION/second-boot-proof"
 SOURCE="$KIT/upstream-src"
@@ -55,6 +59,12 @@ if [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "cache-reset" ]; then
   actual="$(timeout 35 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.sys.safemode | tr -d '\r')"
   printf 'GUEST_SAFE_MODE=%s\n' "$actual" | tee "$PROOF/shortcut-experiment.txt"
   [ "$actual" != 1 ] || { echo "Cache reset ran in Safe Mode; reject ambiguous result" >&2; exit 88; }
+  cache_result="$(timeout 35 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell cat /data/local/tmp/vmfabric-shortcut-cache-result.txt | tr -d '\\r')"
+  printf '%s\\n' "$cache_result" | tee -a "$PROOF/shortcut-experiment.txt"
+  [ "$cache_result" = "SHORTCUT_CACHE_MOVED=1" ] || {
+    echo "No confirmed ShortcutService cache move in disposable guest; reject experiment" >&2
+    exit 89
+  }
 elif [ "${ANDROID_SHORTCUT_TEST:-baseline}" = "safemode" ]; then
   actual="$(timeout 35 "$SDK_ROOT/platform-tools/adb" -s emulator-5554 shell getprop ro.sys.safemode | tr -d '\r')"
   printf 'GUEST_SAFE_MODE=%s\n' "$actual" | tee "$PROOF/shortcut-experiment.txt"
