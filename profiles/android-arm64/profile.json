@@ -31,5 +31,6 @@
   "description": "Real normal-mode Android 9 ARM64 TCG second boots passed at 4096 MiB (run 41251519179) and 2304 MiB (run 41252841437), each with five same-PID system_server checks and Launcher3 evidence, clean QCOW2 and immutable base. Prior ART/ShortcutParser crash was intermittent. ChatGPT 4GiB cgroup host run and repeatability still unproven; status intentionally experimental.",
   "console_script": "scripts/console.py",
   "smoke_script": "scripts/run-chat-smoke.sh",
-  "doctor_script": "scripts/doctor.py"
+  "doctor_script": "scripts/doctor.py",
+  "restore_script": "scripts/restore-private-release.py"
 }
