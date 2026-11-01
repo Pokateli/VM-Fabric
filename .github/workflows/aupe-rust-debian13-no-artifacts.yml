@@ -1,0 +1,74 @@
+name: AUPE Rust 0.5.68 Debian13 guest smoke (no artifacts)
+on:
+  push:
+    branches:
+      - aupe/0.5.68-debian13-no-artifacts
+    paths:
+      - .github/workflows/aupe-rust-debian13-no-artifacts.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  aupe-rust-vm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout private VM-Fabric
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout public AUPE Rust 0.5.68
+        uses: actions/checkout@v4
+        with:
+          repository: Pokateli/Temp
+          ref: aupe/0.5.68-rust-parity
+          path: aupe-src
+          persist-credentials: false
+      - name: Install Rust 1.89.0 and build guest test
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.89.0 --profile minimal
+          rustup default 1.89.0
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/aupe-build"
+          cargo build --offline --locked --release --manifest-path \
+            aupe-src/aupe-lab/v068-rust-parity/rust/Cargo.toml --bin vm_smoke
+          test -x "$CARGO_TARGET_DIR/release/vm_smoke"
+      - name: Download and verify private Debian13 release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/aupe-debian-download"
+          gh release download debian13-v1.2.0-fabric \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir "$RUNNER_TEMP/aupe-debian-download" \
+            --pattern debian13-qemu-bundle.tar.gz \
+            --pattern debian13-qemu-bundle.tar.gz.sha256
+          (cd "$RUNNER_TEMP/aupe-debian-download" && sha256sum -c debian13-qemu-bundle.tar.gz.sha256)
+          python3 vmfabric.py deploy debian13 \
+            --archive "$RUNNER_TEMP/aupe-debian-download/debian13-qemu-bundle.tar.gz" \
+            --target "$RUNNER_TEMP/aupe-debian13"
+          python3 vmfabric.py verify debian13 --target "$RUNNER_TEMP/aupe-debian13"
+      - name: Boot offline Debian13 and test Rust inside guest
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/aupe-build/release/vm_smoke" "$RUNNER_TEMP/aupe-debian13/sharefiles/aupe68_vm_smoke"
+          python3 vmfabric.py run debian13 --mode github \
+            --target "$RUNNER_TEMP/aupe-debian13" --timeout 900 \
+            --command 'set -e; echo GUEST_OS="$(cat /etc/debian_version)"; echo GUEST_KERNEL="$(uname -r)"; if [ -r "/boot/config-$(uname -r)" ]; then grep -E "^CONFIG_RUST=|^# CONFIG_RUST is not set" "/boot/config-$(uname -r)" || true; fi; cp /mnt/dual-vm-run/aupe68_vm_smoke /tmp/aupe68_vm_smoke; chmod 0755 /tmp/aupe68_vm_smoke; /tmp/aupe68_vm_smoke; echo AUPE68_DEBIAN_VM_RESULT=PASS' \
+            --log "$RUNNER_TEMP/aupe-console.log" \
+            --output "$RUNNER_TEMP/aupe-output.txt" || {
+              echo 'VM command failed; console tail:'
+              tail -n 100 "$RUNNER_TEMP/aupe-console.log" || true
+              exit 1
+            }
+          grep -F 'VM_SMOKE_PASS' "$RUNNER_TEMP/aupe-output.txt"
+          grep -F 'AUPE68_DEBIAN_VM_RESULT=PASS' "$RUNNER_TEMP/aupe-output.txt"
+          "$RUNNER_TEMP/aupe-debian13/lib/ld-linux-x86-64.so.2" \
+            --library-path "$RUNNER_TEMP/aupe-debian13/lib" \
+            "$RUNNER_TEMP/aupe-debian13/bin/qemu-img" check -f qcow2 \
+            "$RUNNER_TEMP/aupe-debian13/work.qcow2"
+          echo 'AUPE68_VM_FABRIC_E2E=PASS'
