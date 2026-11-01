@@ -58,6 +58,13 @@ def launch(args):
         shell = script_path(p, folder, "bootstrap_script")
         dest = args.target or default_target(args.profile)
         return subprocess.call(["bash", str(shell), str(args.archive), str(dest)])
+    if args.operation == "doctor":
+        if args.profile != "android-arm64" or p.get("os") != "android":
+            raise ValueError("Offline doctor supported only for android-arm64")
+        helper = script_path(p, folder, "doctor_script")
+        target = (args.target or default_target(args.profile)).resolve()
+        return subprocess.call([sys.executable, str(helper), "--target", str(target),
+                                "--ram", str(args.ram)])
     if args.operation == "smoke":
         if args.profile != "android-arm64" or p.get("os") != "android":
             raise ValueError("Experimental smoke is supported only for android-arm64")
@@ -165,6 +172,10 @@ def main():
     deploy.add_argument("profile")
     deploy.add_argument("--archive", type=Path, required=True)
     deploy.add_argument("--target", type=Path)
+    doctor = sub.add_parser("doctor", help="Read-only offline Android ARM64 preflight (no VM boot)")
+    doctor.add_argument("profile")
+    doctor.add_argument("--target", type=Path)
+    doctor.add_argument("--ram", default="auto")
     smoke = sub.add_parser("smoke", help="Explicit offline experimental Android ARM64 single-boot test")
     smoke.add_argument("profile")
     smoke.add_argument("--target", type=Path)
