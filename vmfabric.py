@@ -58,6 +58,12 @@ def launch(args):
         shell = script_path(p, folder, "bootstrap_script")
         dest = args.target or default_target(args.profile)
         return subprocess.call(["bash", str(shell), str(args.archive), str(dest)])
+    if args.operation == "restore":
+        if args.profile != "android-arm64" or p.get("os") != "android":
+            raise ValueError("Private Release restore is supported only for android-arm64")
+        script = script_path(p, folder, "restore_script")
+        return subprocess.call([sys.executable, str(script), "--archive", str(args.archive),
+                                "--sha256", str(args.sha256), "--target", str(args.target)])
     if args.operation == "doctor":
         if args.profile != "android-arm64" or p.get("os") != "android":
             raise ValueError("Offline doctor supported only for android-arm64")
@@ -172,6 +178,11 @@ def main():
     deploy.add_argument("profile")
     deploy.add_argument("--archive", type=Path, required=True)
     deploy.add_argument("--target", type=Path)
+    restore = sub.add_parser("restore", help="Offline SHA256 verified private Android ARM64 Release ZIP restore")
+    restore.add_argument("profile")
+    restore.add_argument("--archive", type=Path, required=True)
+    restore.add_argument("--sha256", type=Path, required=True)
+    restore.add_argument("--target", type=Path, required=True)
     doctor = sub.add_parser("doctor", help="Read-only offline Android ARM64 preflight (no VM boot)")
     doctor.add_argument("profile")
     doctor.add_argument("--target", type=Path)
