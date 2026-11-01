@@ -26,6 +26,11 @@ class AndroidChatSmokeTests(unittest.TestCase):
         self.assertIn('[[ ! -e "$SESSION" && ! -L "$SESSION" ]]',code)
         self.assertIn('prepare-restore.py',code)
         self.assertIn('ANDROID_SHORTCUT_TEST=observe',code)
+        self.assertIn('SDK_QEMU_IMG="$KIT/sdk/emulator/qemu-img"',code)
+        self.assertIn('ANDROID_QEMU_IMG=verified-private-sdk',code)
+        self.assertIn('timeout 12 qemu-img --version',code)
+        self.assertLess(code.index('verify.py" --target "$KIT"'),
+                        code.index('SDK_QEMU_IMG="$KIT/sdk/emulator/qemu-img"'))
         self.assertLess(code.index('prepare-restore.py'),code.index('boot-restored.sh'))
     def test_memory_and_netns_hard_gates_before_disk(self):
         code=SCRIPT.read_text()
