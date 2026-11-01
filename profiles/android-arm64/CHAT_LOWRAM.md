@@ -11,10 +11,11 @@ yet reproducible enough to treat this as a general-purpose VM.
 
 The single GitHub QEMU TCG run
 [#41252841437](https://github.com/Pokateli/VM-Fabric/actions/runs/41252841437)
-is configured for **2304 MiB** guest RAM, the same immutable private Android
-Release kit, ADB `observe` normal mode and no Actions artifact upload. The
-workflow must pass five same-PID PackageManager samples, Launcher3 real
-framebuffer proof, clean QCOW2 stop and original base SHA-256.
+**PASSED** with **2304 MiB** guest RAM, the same immutable private Android
+Release kit, ADB `observe` normal mode and no Actions artifact upload.
+The complete live proof includes all five same-PID PackageManager checks,
+Launcher3 GUI framebuffer, clean QCOW2 validation and original base SHA-256.
+The same test at 4096 MiB also passed independently.
 
 The ChatGPT container currently has a **4096 MiB cgroup limit**. QEMU, the
 emulator, Python, page cache and other processes share this limit. The memory
@@ -30,6 +31,12 @@ After the **private kit has already been downloaded and verified**, run:
 ```bash
 # Requires root and installed local qemu-img, unshare, ip, python3.
 # The session must NOT already exist; source /data image is immutable.
+python3 vmfabric.py smoke android-arm64 \
+  --target /mnt/data/android-arm64-restored \
+  --session /mnt/data/android-arm64-chat-session \
+  --ram auto
+
+# Equivalent explicit entrypoint:
 sudo bash profiles/android-arm64/scripts/run-chat-smoke.sh \
   --kit /mnt/data/android-arm64-restored \
   --session /mnt/data/android-arm64-chat-session \
@@ -60,3 +67,12 @@ supports this working fallback. The sandbox currently still lacks
 `qemu-img` and the private Google Android SDK kit. Those prerequisites
 prevent an actual local ARM64 guest boot today; static tests and GitHub's
 QEMU TCG successes are not substitutes for real ChatGPT-local proof.
+
+## Verification / safety status (2026-11-01)
+
+- GitHub low-RAM test [#41252841437](https://github.com/Pokateli/VM-Fabric/actions/runs/41252841437): **success**, 2304 MiB, 5/5 stable PackageManager checks, real Launcher3 and immutable QCOW2.
+- Fast CI [#41255615499](https://github.com/Pokateli/VM-Fabric/actions/runs/41255615499): **77/77 tests**.
+- `minimum_guest_ram_mib` is now 2304 based on observed GitHub ARM64 TCG evidence; `status` remains `experimental` and `runtime=[]`. The normal `vmfabric.py run` stays disabled for Android.
+- `vmfabric.py smoke android-arm64` explicitly runs the offline smoke path instead. It requires an already verified private SDK kit and host QEMU dependencies; it does not download files or change the saved base.
+- `verify.py --live` now requires exact `Service package: found` instead of the substring `found` (which also appears in `not found`).
+- Chat sandbox: user+network namespace with loopback is confirmed; `qemu-img` is missing and local `apt-get update` could not complete in a bounded network test. The private Android kit is not present under `/mnt/data`. Actual ChatGPT-local boot is not yet established.
