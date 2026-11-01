@@ -6,6 +6,9 @@ from pathlib import Path
 import subprocess
 import sys
 
+def package_service_ready(exit_code, output):
+    return exit_code==0 and output.strip()=="Service package: found"
+
 def check(target, live=False):
     root=target.resolve()
     sdk=root/"sdk"
@@ -37,7 +40,7 @@ def check(target, live=False):
         p=subprocess.run([str(adb),"-s","emulator-5554","shell",
                           "service","check","package"],
                          capture_output=True,text=True,timeout=120)
-        if p.returncode!=0 or p.stdout.strip()!="Service package: found":
+        if not package_service_ready(p.returncode,p.stdout):
             raise ValueError("Android package service is not ready: "+p.stdout[:300])
         result["adb_proof"]=True
         result["package_service"]="found"
