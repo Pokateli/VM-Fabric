@@ -37,6 +37,21 @@ class DoctorTests(unittest.TestCase):
                 result=doctor.diagnose(Path(d))
             self.assertIn("qemu-img",result["checks"]["required_tools_missing"])
             self.assertFalse(result["local_smoke_prerequisites_met"])
+    def test_verified_sdk_qemu_img_satisfies_missing_host_binary(self):
+        with tempfile.TemporaryDirectory() as d:
+            target=Path(d)
+            bundled=target/"sdk/emulator/qemu-img"
+            bundled.parent.mkdir(parents=True)
+            bundled.write_text("#!/bin/sh\\nexit 0\\n")
+            bundled.chmod(0o755)
+            with patch.object(doctor,"ram_budget",return_value={"ok":True,"selected_guest_mib":2304}), \
+                 patch.object(doctor,"check_network_namespace",return_value={"ok":True,"method":"user-map-root"}), \
+                 patch.object(doctor,"check_kit",return_value={"ok":True}), \
+                 patch.object(doctor.shutil,"which",side_effect=lambda t: None if t=="qemu-img" else "/usr/bin/x"):
+                result=doctor.diagnose(target)
+            self.assertTrue(result["local_smoke_prerequisites_met"])
+            self.assertEqual(result["checks"]["qemu_img_source"],"verified-private-sdk")
+            self.assertNotIn("qemu-img",result["checks"]["required_tools_missing"])
     def test_network_namespace_fallback_is_isolated(self):
         with patch.object(doctor.shutil,"which",return_value="/usr/bin/tool"), \
              patch.object(doctor,"namespace_probe",side_effect=[False,True]) as probe:
