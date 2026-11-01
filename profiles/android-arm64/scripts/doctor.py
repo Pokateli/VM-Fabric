@@ -8,6 +8,7 @@ Experimental profile status is deliberately NOT the same as host readiness.
 import argparse
 import importlib.util
 import json
+import os
 from pathlib import Path
 import platform
 import shutil
@@ -79,12 +80,21 @@ def check_kit(target):
     return {"ok":True,"path":str(target),"guest_abi":"arm64-v8a"}
 
 def diagnose(target,request="auto"):
-    required=("qemu-img","unshare","ip","python3","timeout","realpath")
+    required=("unshare","ip","python3","timeout","realpath")
     missing=[x for x in required if not shutil.which(x)]
     ram=ram_budget(request)
     net=check_network_namespace()
     kit=check_kit(target)
+    system_qemu_img=bool(shutil.which("qemu-img"))
+    bundled=target/"sdk/emulator/qemu-img"
+    sdk_qemu_img=(not system_qemu_img and kit["ok"] and
+                  bundled.is_file() and os.access(bundled,os.X_OK))
+    qemu_img_source=("system" if system_qemu_img else
+                     "verified-private-sdk" if sdk_qemu_img else None)
+    if qemu_img_source is None:
+        missing.append("qemu-img")
     checks={"host_architecture":platform.machine(),"required_tools_missing":missing,
+            "qemu_img_source":qemu_img_source,
             "memory":ram,"isolated_loopback_network":net,"private_kit":kit}
     ready=(platform.machine() in ("x86_64","amd64") and not missing
            and ram["ok"] and net["ok"] and kit["ok"])
