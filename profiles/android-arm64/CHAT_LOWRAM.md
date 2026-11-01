@@ -24,6 +24,34 @@ already in use). A 4096 MiB guest is rejected when it cannot fit. Running a
 2304 MiB guest on GitHub does **not** by itself prove it works in ChatGPT's
 4 GiB total host.
 
+## Offline private Release restore and host doctor (2026-11-01)
+
+The private GitHub Release asset `run-41129772918-artifact-13012994299-vm-fabric-android-arm64-private-kit.zip` was archived under tag `actions-artifacts-archive-2026-10`, along with its matching `.zip.sha256` sidecar. To avoid Actions storage, use the existing Release: first obtain both files through an authenticated GitHub client **outside** the sandbox, then provide them locally. This command does not access GitHub, download SDK binaries, or use external storage.
+
+```bash
+python3 vmfabric.py restore android-arm64 \
+  --archive /mnt/data/run-41129772918-artifact-13012994299-vm-fabric-android-arm64-private-kit.zip \
+  --sha256 /mnt/data/run-41129772918-artifact-13012994299-vm-fabric-android-arm64-private-kit.zip.sha256 \
+  --target /mnt/data/android-arm64-restored
+
+python3 vmfabric.py doctor android-arm64 \
+  --target /mnt/data/android-arm64-restored --ram auto
+
+# Only if doctor reports local_smoke_prerequisites_met=true:
+python3 vmfabric.py smoke android-arm64 \
+  --target /mnt/data/android-arm64-restored \
+  --session /mnt/data/android-arm64-chat-session \
+  --ram auto
+```
+
+The `restore` command verifies the whole Release ZIP SHA-256, restricts members to the exact shard manifest and numbered parts, calls the pinned private-kit internal SHA-256 verification and checks Android ARM64 SDK provenance. It uses a temporary local directory and publishes the restored target only after every check succeeds. A pre-existing destination is rejected. Restoration requires free local disk space but **does not require QEMU**.
+
+The `doctor` command checks host cgroup RAM, namespace isolation, SDK/ABI evidence and the availability of `qemu-img`, without writing any image. If there is no system `qemu-img`, the smoke launcher can use the SDK's own `sdk/emulator/qemu-img` **only if it exists and is executable after kit verification**; its `--version` command must also succeed. Android SDK installations can include such a binary, but it has not been inspected in this chat sandbox. No assumptions are made that it is always bundled.
+
+Both commands preserve `status=experimental` and the normal `run` gate. Keep Google's Android SDK/private system images out of public GitHub releases and chat-visible raw logs. Neither restores the kit currently absent from this sandbox nor proves that Android launches within its 4 GiB total memory limit.
+
+---
+
 ## Explicit offline ChatGPT smoke-test entrypoint (not an interactive console)
 
 After the **private kit has already been downloaded and verified**, run:
