@@ -22,7 +22,7 @@ done
 [[ -n "$KIT" && -n "$SESSION" ]] || usage
 (( EUID == 0 )) || { echo "Root required for isolated network namespace (sudo bash ...)" >&2; exit 3; }
 
-for tool in qemu-img unshare ip realpath python3 timeout; do
+for tool in unshare ip realpath python3 timeout; do
   command -v "$tool" >/dev/null || { echo "Missing local tool: $tool" >&2; exit 3; }
 done
 KIT="$(realpath -e -- "$KIT")"
@@ -58,6 +58,25 @@ export ANDROID_GUEST_RAM_MIB="$MEM"
 export ANDROID_SHORTCUT_TEST=observe
 
 python3 "$HERE/verify.py" --target "$KIT"
+# If the host has no qemu-utils (e.g., offline ChatGPT), try qemu-img
+# shipped inside the already-verified pinned private emulator SDK. Never
+# execute an unverified arbitrary binary; fail closed if it cannot run.
+if ! command -v qemu-img >/dev/null 2>&1; then
+  SDK_QEMU_IMG="$KIT/sdk/emulator/qemu-img"
+  [[ -x "$SDK_QEMU_IMG" ]] || {
+    echo "Neither host nor verified Android SDK provides executable qemu-img" >&2
+    exit 3
+  }
+  export PATH="$KIT/sdk/emulator:$PATH"
+  export LD_LIBRARY_PATH="$KIT/sdk/emulator/lib64/gles_swiftshader:$KIT/sdk/emulator/lib64:${LD_LIBRARY_PATH:-}"
+  timeout 12 qemu-img --version >/dev/null || {
+    echo "Verified SDK qemu-img is not executable with available host libraries" >&2
+    exit 3
+  }
+  echo "ANDROID_QEMU_IMG=verified-private-sdk"
+else
+  echo "ANDROID_QEMU_IMG=system"
+fi
 python3 "$HERE/prepare-restore.py" --kit "$KIT" --session "$SESSION"
 
 echo "ANDROID_CHAT_EXPERIMENT=offline ram_mib=$MEM"
