@@ -1,3 +1,13 @@
+## 2026-11-01 — Offline restore + local doctor, no Actions artifact storage
+
+- New `vmfabric.py restore android-arm64 --archive RELEASE.zip --sha256 RELEASE.zip.sha256 --target NEW_KIT` reconstructs a PRIVATE local kit from the existing GitHub Release. Checks ZIP sidecar SHA256, strictly allowlisted shard entries, internal private-kit manifest/shard hashes and the pinned Android SDK. No network or cloud storage; output directory is published only after full verification.
+- New `vmfabric.py doctor android-arm64 --target NEW_KIT --ram auto` is a read-only preflight that reports actual host memory cgroup budget, available tools, network namespace isolation, and presence of the private ARM64 kit. It does not falsely claim Android has booted.
+- `run-chat-smoke.sh` can try `sdk/emulator/qemu-img` after kit validation when no system `qemu-img` is installed. It checks the executable before creating any QCOW2 overlay. This is conditional: the bundled binary has not been inspected in the current chat sandbox.
+- Offline regression passed [#41256157095](https://github.com/Pokateli/VM-Fabric/actions/runs/41256157095): **94 tests**, no errors or warnings. Tests include a Release archive SHA256 mismatch, ZIP path traversal, invalid shard manifest, existing destination refusal, doctor fallback, and preservation of the experimental profile gate.
+- The private Release archive and SDK are **not present** in the current chat sandbox and outbound DNS to Debian mirrors is unavailable. This update does not claim a successful ChatGPT-local QEMU run. The verified GitHub guest boot remains 2304 MiB, 5/5 stable PackageManager, genuine Launcher3, clean QCOW2 and immutable base (run #41252841437).
+
+---
+
 ## 2026-11-01 — Verified 2304 MiB normal-mode ARM64 TCG second boot and offline CLI smoke
 
 - [GitHub Actions #41252841437](https://github.com/Pokateli/VM-Fabric/actions/runs/41252841437) completed SUCCESS with exactly **2304 MiB** guest memory, 1 vCPU, no KVM, no Safe Mode. Stable 5/5 unchanged-PID PackageManager checks, real Launcher3 GUI evidence, clean QCOW2 and immutable SHA-256 all passed.
