@@ -15,11 +15,14 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Remove precisely requested temporary artifact
         shell: bash
         run: |
           set -Eeuo pipefail
-          id="$(curl -fsSL "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/.github/aupe-transfer-cleanup/request.txt" 2>/dev/null || true)"
+          id="$(cat .github/aupe-transfer-cleanup/request.txt)"
           if [[ ! "$id" =~ ^[0-9]{8,15}$ ]]; then
             echo 'Invalid artifact id' >&2; exit 2
           fi
