@@ -1,3 +1,15 @@
+## 2026-11-01 — Verified 2304 MiB normal-mode ARM64 TCG second boot and offline CLI smoke
+
+- [GitHub Actions #41252841437](https://github.com/Pokateli/VM-Fabric/actions/runs/41252841437) completed SUCCESS with exactly **2304 MiB** guest memory, 1 vCPU, no KVM, no Safe Mode. Stable 5/5 unchanged-PID PackageManager checks, real Launcher3 GUI evidence, clean QCOW2 and immutable SHA-256 all passed.
+- The previous normal-mode 4096 MiB run #41251519179 also passed the same gates. The earlier intermittent ART/ShortcutParser crash requires repeated testing before production promotion.
+- Android profile minimum guest RAM updated from 4096 MiB to verified 2304 MiB. Profile is still **experimental** with `runtime: []`, not ready for unrestricted `run`.
+- Separate `python3 vmfabric.py smoke android-arm64 --target KIT --session NEW_SESSION --ram auto` can run an explicit offline isolated COW experiment. It does not bypass the experimental profile execution gate.
+- `verify.py --live` now rejects `Service package: not found` unambiguously. Offline regression [#41255615499](https://github.com/Pokateli/VM-Fabric/actions/runs/41255615499) passed 77 tests.
+- Local ChatGPT 4 GiB sandbox: user+net namespace worked, but `qemu-img` and the private Android image were unavailable. No actual ChatGPT-local Android execution has been claimed.
+- Private Release is reused, no new large Actions artifacts were uploaded.
+
+---
+
 ## 2026-11-01 — Normal-mode Android ARM64 restored second boot PASSED (4096 MiB)
 
 [Live run #41251519179](https://github.com/Pokateli/VM-Fabric/actions/runs/41251519179) ended in **success**:
