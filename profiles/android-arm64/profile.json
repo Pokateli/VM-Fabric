@@ -4,14 +4,14 @@
   "architecture": "aarch64",
   "host_architecture": "x86_64",
   "os": "android",
-  "version": "9 (API 28) - experimental normal-mode repeated image boot",
+  "version": "9 (API 28) - verified 2304 MiB normal-mode TCG second boot, experimental",
   "abi": "arm64-v8a",
   "status": "experimental",
   "driver": "google-emulator-qemu-aarch64-tcg",
   "runtime": [],
   "guest_network": "isolated host network namespace (loopback only)",
   "acceleration": "tcg",
-  "minimum_guest_ram_mib": 4096,
+  "minimum_guest_ram_mib": 2304,
   "bootstrap_script": "scripts/bootstrap.sh",
   "run_script": "scripts/run-vm.sh",
   "verify_script": "scripts/verify.py",
@@ -28,6 +28,6 @@
     "android_ready": "service check package -> found"
   },
   "risk": "Experimental only. Upstream toolkit patches Android/emulator binaries, disables some HALs and SELinux enforcement; do not use with sensitive user accounts or secrets.",
-  "description": "Android ARM64 TCG: real second boot in normal mode passed at 4096 MiB (run 41251519179), 5/5 unchanged system_server PID and Launcher3 evidence. Repeatability and 2304 MiB guest RAM/4 GiB chat host remain unproven; profile deliberately experimental.",
+  "description": "Real normal-mode Android 9 ARM64 TCG second boots passed at 4096 MiB (run 41251519179) and 2304 MiB (run 41252841437), each with five same-PID system_server checks and Launcher3 evidence, clean QCOW2 and immutable base. Prior ART/ShortcutParser crash was intermittent. ChatGPT 4GiB cgroup host run and repeatability still unproven; status intentionally experimental.",
   "console_script": "scripts/console.py"
 }
