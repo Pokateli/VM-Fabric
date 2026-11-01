@@ -58,6 +58,16 @@ def launch(args):
         shell = script_path(p, folder, "bootstrap_script")
         dest = args.target or default_target(args.profile)
         return subprocess.call(["bash", str(shell), str(args.archive), str(dest)])
+    if args.operation == "smoke":
+        if args.profile != "android-arm64" or p.get("os") != "android":
+            raise ValueError("Experimental smoke is supported only for android-arm64")
+        runner = script_path(p, folder, "smoke_script")
+        target = (args.target or default_target(args.profile)).resolve()
+        session = args.session.resolve()
+        return subprocess.call([
+            "bash", str(runner), "--kit", str(target), "--session", str(session),
+            "--ram", str(args.ram)
+        ])
     if args.operation == "build":
         shell = script_path(p, folder, "build_script")
         target = args.output_dir.resolve()
@@ -155,6 +165,11 @@ def main():
     deploy.add_argument("profile")
     deploy.add_argument("--archive", type=Path, required=True)
     deploy.add_argument("--target", type=Path)
+    smoke = sub.add_parser("smoke", help="Explicit offline experimental Android ARM64 single-boot test")
+    smoke.add_argument("profile")
+    smoke.add_argument("--target", type=Path)
+    smoke.add_argument("--session", type=Path, required=True)
+    smoke.add_argument("--ram", default="auto")
     build = sub.add_parser("build", help="Build an image from migrated sources (Docker on build host)")
     build.add_argument("profile")
     build.add_argument("--output-dir", type=Path, required=True)
