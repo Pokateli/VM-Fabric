@@ -1,0 +1,39 @@
+name: Transfer Debian13 VM into ChatGPT sandbox (no VM on GitHub)
+on:
+  push:
+    branches:
+      - transfer/aupe-debian13-to-chat-20261101
+    paths:
+      - .github/workflows/aupe-local-vm-transfer.yml
+permissions:
+  contents: read
+jobs:
+  transfer-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download already-built VM release (no guest execution)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/debian-transfer"
+          gh release download debian13-v1.2.0-fabric --repo "$GITHUB_REPOSITORY" \
+            --dir "$RUNNER_TEMP/debian-transfer" \
+            --pattern 'debian13-qemu-bundle.tar.gz' \
+            --pattern 'debian13-qemu-bundle.tar.gz.sha256'
+          (cd "$RUNNER_TEMP/debian-transfer" && sha256sum -c debian13-qemu-bundle.tar.gz.sha256)
+          printf '%s  %s\n' 'b711d8f33bb5cde476cb31fff7f44e13260ed3ad8ca86b1f968876cd4740697f' \
+            "$RUNNER_TEMP/debian-transfer/debian13-qemu-bundle.tar.gz" | sha256sum -c -
+          du -h "$RUNNER_TEMP/debian-transfer/debian13-qemu-bundle.tar.gz"
+      - name: Temporary artifact for ChatGPT local transfer ONLY
+        uses: actions/upload-artifact@v4
+        with:
+          name: aupe-local-debian13-20261101
+          path: |
+            ${{ runner.temp }}/debian-transfer/debian13-qemu-bundle.tar.gz
+            ${{ runner.temp }}/debian-transfer/debian13-qemu-bundle.tar.gz.sha256
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error

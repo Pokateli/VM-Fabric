@@ -1,0 +1,29 @@
+name: Delete transferred Debian13 Actions Artifact immediately
+on:
+  push:
+    branches:
+      - transfer/aupe-debian13-to-chat-20261101
+    paths:
+      - .github/aupe-transfer-cleanup/request.txt
+permissions:
+  contents: read
+  actions: write
+jobs:
+  delete-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Remove precisely requested temporary artifact
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          id="$(curl -fsSL "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/.github/aupe-transfer-cleanup/request.txt" 2>/dev/null || true)"
+          if [[ ! "$id" =~ ^[0-9]{8,15}$ ]]; then
+            echo 'Invalid artifact id' >&2; exit 2
+          fi
+          name="$(gh api "/repos/$GITHUB_REPOSITORY/actions/artifacts/$id" --jq .name)"
+          [[ "$name" == "aupe-local-debian13-20261101" ]] || { echo "Artifact name mismatch: $name" >&2; exit 3; }
+          gh api --method DELETE "/repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
+          echo "DELETED_TEMPORARY_ARTIFACT_ID=$id"
