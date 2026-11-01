@@ -46,6 +46,7 @@ class AndroidChatSmokeTests(unittest.TestCase):
         p=json.loads((ROOT/"profiles/android-arm64/profile.json").read_text())
         self.assertEqual(p["status"],"experimental")
         self.assertEqual(p["runtime"],[])
-        self.assertEqual(p["minimum_guest_ram_mib"],4096)
+        self.assertEqual(p["minimum_guest_ram_mib"],2304)
+        self.assertIn("41252841437",p["description"])
 
 if __name__=="__main__":unittest.main()
