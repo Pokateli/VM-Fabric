@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Offline restore transport checks; never upload or require an Android SDK."""
 import hashlib
+import argparse
+import sys
+from unittest.mock import patch
 import importlib.util
 import json
 from pathlib import Path
@@ -28,6 +31,28 @@ def make_zip(root,additional=None,parts=None):
     return archive,sidecar
 
 class PrivateAndroidRestoreTests(unittest.TestCase):
+    def test_cli_restore_dispatches_without_enabling_ordinary_run(self):
+        sys.path.insert(0,str(SRC.parents[3]))
+        import vmfabric
+        args=argparse.Namespace(operation="restore",profile="android-arm64",
+            archive=Path("/tmp/private.zip"),sha256=Path("/tmp/private.zip.sha256"),
+            target=Path("/tmp/restored"))
+        with patch.object(vmfabric.subprocess,"call",return_value=0) as runner:
+            self.assertEqual(vmfabric.launch(args),0)
+        argv=runner.call_args.args[0]
+        self.assertEqual(Path(argv[1]).name,"restore-private-release.py")
+        self.assertEqual(argv[2:],["--archive","/tmp/private.zip","--sha256",
+                                   "/tmp/private.zip.sha256","--target","/tmp/restored"])
+        p,_=vmfabric.load_profile("android-arm64")
+        self.assertEqual(p["status"],"experimental")
+        self.assertEqual(p["runtime"],[])
+    def test_cli_restore_other_profile_denied(self):
+        sys.path.insert(0,str(SRC.parents[3]))
+        import vmfabric
+        args=argparse.Namespace(operation="restore",profile="tiny11",
+            archive=Path("/tmp/zip"),sha256=Path("/tmp/sha"),target=Path("/tmp/image"))
+        with self.assertRaisesRegex(ValueError,"only for android-arm64"):
+            vmfabric.launch(args)
     def test_good_bundle_transport_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
